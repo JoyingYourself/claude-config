@@ -1,0 +1,30 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__moor__data_gil__discover",
+      "mcp__moor__data_gil__plan",
+      "mcp__moor__chinapostamc_strategy_callback__list_strategies",
+      "mcp__moor__chinapostamc_strategy_callback__get_performance",
+      "mcp__moor__chinapostamc_strategy_callback__get_nav_data",
+      "mcp__moor__report_gil__load_backtest_result",
+      "mcp__moor__vision_bridge__analyze_image",
+      "mcp__email__folders",
+      "mcp__wechat__*"
+    ]
+  },
+  "enabledPlugins": {
+    "codebase-audit-suite@levnikolaevich-skills-marketplace": true
+  },
+  "extraKnownMarketplaces": {
+    "levnikolaevich-skills-marketplace": {
+      "source": {
+        "source": "github",
+        "repo": "levnikolaevich/claude-code-skills"
+      }
+    }
+  },
+  "skipWorkflowUsageWarning": true,
+  "theme": "auto",
+  "skipDangerousModePermissionPrompt": true,
+  "channelsEnabled": true
+}

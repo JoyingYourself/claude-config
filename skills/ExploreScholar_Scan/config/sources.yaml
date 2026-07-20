@@ -1,0 +1,135 @@
+# ============================================================
+# ExploreScholar_Scan — 四源配置
+# ============================================================
+
+sources:
+  arxiv:
+    enabled: true
+    base_url: "http://export.arxiv.org/api/query"
+    categories:
+      - q-fin.PM    # Portfolio Management
+      - q-fin.ST    # Statistical Finance
+      - q-fin.PR    # Pricing of Securities
+      - q-fin.RM    # Risk Management
+      - q-fin.GN    # General Finance
+      - q-fin.TR    # Trading and Market Microstructure
+      - q-fin.MF    # Mathematical Finance
+      - q-fin.CP    # Computational Finance
+      - q-fin.EC    # Economics
+    cross_categories:
+      - cs.LG       # Machine Learning (keyword filtered)
+      - stat.ML     # Machine Learning (keyword filtered)
+      - stat.AP     # Applications (keyword filtered)
+    cross_category_keywords:
+      - "stock return"
+      - "equity factor"
+      - "portfolio"
+      - "trading signal"
+      - "cross-section"
+      - "A-share"
+      - "Chinese stock"
+      - "asset pricing"
+      - "return predictability"
+      - "quantitative investment"
+    max_results: 200
+    lookback_days: 7
+    timeout_seconds: 30
+    output: "/tmp/arxiv_raw.json"
+
+  nber:
+    enabled: true
+    rss_url: "https://www.nber.org/rss/new.xml"
+    programs:
+      - AP    # Asset Pricing
+      - CF    # Corporate Finance
+      - EF    # Economic Fluctuations and Growth
+      - ME    # Monetary Economics
+    program_filter_keywords:
+      AP:
+        - "stock"
+        - "equity"
+        - "return"
+        - "factor"
+        - "portfolio"
+        - "cross-section"
+      CF:
+        - "payout"
+        - "investment"
+        - "capital structure"
+        - "equity"
+      EF:
+        - "stock market"
+        - "equity premium"
+      ME:
+        - "stock"
+        - "equity"
+        - "financial market"
+    fallback_method: "chrome_mcp"   # If RSS fails, use Chrome MCP
+    timeout_seconds: 30
+    output: "/tmp/nber_raw.json"
+
+  ssrn:
+    enabled: true
+    networks:
+      - FEN    # Financial Economics Network
+      - ERN    # Economics Research Network
+    subcategories:
+      FEN:
+        - "Capital Markets"
+        - "Asset Pricing"
+        - "Behavioral Finance"
+        - "Empirical Finance"
+      ERN:
+        - "Econometrics"
+        - "Microeconomics"
+    rss_feeds:
+      - "https://papers.ssrn.com/sol3/JELJOUR_Results.cfm?form_name=journalBrowse&journal_id=1"
+    timeout_seconds: 45
+    output: "/tmp/ssrn_raw.json"
+
+  journals:
+    enabled: true
+    journals:
+      - name: "Journal of Finance"
+        short: "JF"
+        url: "https://onlinelibrary.wiley.com/journal/15406261"
+        toc_url: "https://onlinelibrary.wiley.com/toc/15406261/current"
+        frequency: "bimonthly"
+      - name: "Journal of Financial Economics"
+        short: "JFE"
+        url: "https://www.sciencedirect.com/journal/journal-of-financial-economics"
+        toc_url: "https://www.sciencedirect.com/journal/journal-of-financial-economics/issues"
+        frequency: "monthly"
+      - name: "Review of Financial Studies"
+        short: "RFS"
+        url: "https://academic.oup.com/rfs"
+        toc_url: "https://academic.oup.com/rfs/issue"
+        frequency: "monthly"
+      - name: "Journal of Financial and Quantitative Analysis"
+        short: "JFQA"
+        url: "https://www.cambridge.org/core/journals/journal-of-financial-and-quantitative-analysis"
+        toc_url: "https://www.cambridge.org/core/journals/journal-of-financial-and-quantitative-analysis/latest-issue"
+        frequency: "bimonthly"
+      - name: "Journal of Portfolio Management"
+        short: "JPM"
+        url: "https://jpm.pm-research.com/"
+        toc_url: "https://jpm.pm-research.com/content/current"
+        frequency: "bimonthly"
+    timeout_seconds: 60
+    output: "/tmp/journals_raw.json"
+
+# Dedup configuration
+dedup:
+  methods:
+    - "doi"            # Exact DOI match (highest precision)
+    - "title_similarity" # Levenshtein ratio > threshold
+    - "arxiv_id"       # arXiv ID match (for cross-source dedup)
+  title_similarity_threshold: 0.90
+  keep_strategy: "first_seen"  # Keep first occurrence when duplicates found
+  merge_output: "/tmp/all_papers.json"
+
+# Archive configuration
+archive:
+  base_dir: "/Users/junye_shi/AgentFiles/Multi-toolIntegrationAgent/Weekly_ResearchReport/中间文件"
+  keep_raw: true
+  keep_merged: true

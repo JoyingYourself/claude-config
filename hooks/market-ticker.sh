@@ -1,0 +1,59 @@
+#!/bin/bash
+# Claude Code statusline — 三行行情播报
+# Line 1: 上证/深证/创业板/科创50/伦敦金现
+# Line 2: 价值100/自由现金流/优势成长/南方原油/中国海油
+# Line 3: 中邮价值1号 估算净值 (60s 刷新)
+
+TICKER_FILE="$HOME/.cache/market-dash/ticker.txt"
+NAV_LINE_FILE="$HOME/.cache/market-dash/nav_line.txt"
+PID_FILE="$HOME/.cache/market-dash/ticker.pid"
+NAV_PID_FILE="$HOME/.cache/market-dash/nav_estimator.pid"
+DAEMON_DIR="/Users/junye_shi/中邮资管/中邮金市/target_list/产品净值/market-data"
+
+# 快速路径：缓存存在且新鲜（< 10 秒）
+if [ -f "$TICKER_FILE" ]; then
+    NOW=$(date +%s)
+    FILE_MTIME=$(stat -f %m "$TICKER_FILE" 2>/dev/null || echo 0)
+    if [ $((NOW - FILE_MTIME)) -lt 10 ]; then
+        cat "$TICKER_FILE"
+        if [ -f "$NAV_LINE_FILE" ]; then
+            echo ""
+            cat "$NAV_LINE_FILE"
+        fi
+        exit 0
+    fi
+fi
+
+# 检查行情守护进程
+daemon_alive=false
+if [ -f "$PID_FILE" ]; then
+    PID=$(cat "$PID_FILE")
+    kill -0 "$PID" 2>/dev/null && daemon_alive=true
+fi
+
+# 需要启动？
+if ! $daemon_alive; then
+    cd "$DAEMON_DIR" && python3 -m src.ticker_daemon --daemon --interval 5 > /dev/null 2>&1 &
+    disown 2>/dev/null
+fi
+
+# 检查 NAV 估算守护进程
+nav_alive=false
+if [ -f "$NAV_PID_FILE" ]; then
+    NAV_PID=$(cat "$NAV_PID_FILE")
+    kill -0 "$NAV_PID" 2>/dev/null && nav_alive=true
+fi
+
+if ! $nav_alive; then
+    cd "$DAEMON_DIR" && /opt/anaconda3/bin/python3 -m src.nav_estimator --daemon > /dev/null 2>&1 &
+    disown 2>/dev/null
+fi
+
+# 返回缓存
+if [ -f "$TICKER_FILE" ]; then
+    cat "$TICKER_FILE"
+    [ -f "$NAV_LINE_FILE" ] && cat "$NAV_LINE_FILE"
+else
+    echo "⏳ 行情加载中..."
+    [ -f "$NAV_LINE_FILE" ] && cat "$NAV_LINE_FILE"
+fi
