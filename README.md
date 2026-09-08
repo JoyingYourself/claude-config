@@ -47,7 +47,7 @@
 |---|---|---|
 | skills/ | 26 实体 | 全局技能全家:Engineering_*(审计/验证/脚手架/长任务)13、DocumentJournal_* 2、ResearchGil_Data_* 2、DepartmentServer_Deploy、external-apps、frontend-design、obsidian-markdown、baoyu-design、cli-anything、engineering 内嵌组 |
 | skills/lark-* | 28 链接 | **不复制实体**——符号链接指向 `AgentFiles/feishu/core/vendor/larksuite-cli/skills/`,版本由 feishu 上游管理 |
-| hooks/ | 12 | 教训纪律 4(lesson-guard/lessons-inject/verify-reminder/config-change-reminder)、项目纪律 1(project-type-prompt)、状态栏 2(market-ticker/statusline-combined)、自动化 5(autopilot-* 3 + auto-validate + register-process) |
+| hooks/ | 11 | 教训纪律 3(lesson-guard/verify-reminder/config-change-reminder)、项目纪律 1(project-type-prompt)、状态栏 2(market-ticker¹/statusline-combined)、自动化 5(autopilot-* 3 + auto-validate + register-process);¹market-ticker 未挂 settings,下游为中邮资管 market-data 守护文档引用(手动工具,勿删) |
 | commands/ | 0 | 已废弃(运行位无此机制) |
 | workflows/ | 0 | ⚠️ 曾含 ChinapostAMC_StrategyOrder(全局旧版 8/3);2026-09-08 双版本收敛:正版 = 中邮资管/.claude/workflows 项目级 9/2 场景化版,全局已删(commit 8a41fd6)。业务工作流归业务工作区,全局不驻留 |
 | CLAUDE.md / lessons.md | 2 | 高频变更,随会话纪律收尾即推 |
