@@ -13,7 +13,7 @@
 | settings.json | 存在 | ✅ 同步(私有仓库可入库,0908 拍板) |
 | settings.local.json | 存在(本机私有) | 不入库,每机独立 |
 | hooks/ | 12 个生效脚本 | ✅ 同步 |
-| skills/ | 54 项 = 直写 26(归仓库)+ lark-* 28 链接(feishu 上游) | 仓库管直写;链接归上游;2026-09-08 清理 14 个工作区/废弃残留 |
+| skills/ | 53 项 = 直写 25(归仓库)+ lark-* 28 链接(feishu 上游) | 仓库管直写;链接归上游;2026-09-08 清理 14 个工作区/废弃残留 |
 | workflows/ | 空 | 业务工作流归业务工作区,全局不驻留 |
 | commands/ | 空(已废弃) | — |
 | plugins/ projects/ sessions/ 等 | Claude Code 运行时数据 | 不入库 |
@@ -30,13 +30,13 @@
     ├── lessons.md              全局教训库
     ├── settings.json           全局设置(含 env 模型路由)
     ├── hooks/                  生命周期钩子(12)
-    ├── skills/                 全局技能(26 直写实体 + lark 依赖登记)
+    ├── skills/                 全局技能(25 直写实体 + lark 依赖登记)
     ├── README.md / HANDOFF.md / ATTENTION.md   三文档(本文含运行位实况)
     └── (settings.local.json 每机独立,不入库)
 
 ~/.claude/                      ← Claude Code 运行位(生效副本)
     ├── CLAUDE.md / lessons.md / settings.json / hooks/
-    ├── skills/  = 仓库 skills 26 + feishu lark-* 28(链接,上游依赖)
+    ├── skills/  = 仓库 skills 25 + feishu lark-* 28(链接,上游依赖)
     ├── settings.local.json     本机独立(不入库)
     └── plugins/ projects/ sessions/ 等  运行时数据(不入库)
 ```
@@ -45,7 +45,7 @@
 
 | 模块 | 数量 | 说明 |
 |---|---|---|
-| skills/ | 26 实体 | 全局技能全家:Engineering_*(审计/验证/脚手架/长任务)13、DocumentJournal_* 2、ResearchGil_Data_* 2、DepartmentServer_Deploy、external-apps、frontend-design、obsidian-markdown、baoyu-design、cli-anything、engineering 内嵌组 |
+| skills/ | 25 实体 | 全局技能全家:Engineering_*(审计/验证/脚手架/长任务)13、DocumentJournal_* 2、ResearchGil_Data_* 2、external-apps、frontend-design、obsidian-markdown、baoyu-design、cli-anything、engineering 内嵌组 |
 | skills/lark-* | 28 链接 | **不复制实体**——符号链接指向 `AgentFiles/feishu/core/vendor/larksuite-cli/skills/`,版本由 feishu 上游管理 |
 | hooks/ | 11 | 教训纪律 3(lesson-guard/verify-reminder/config-change-reminder)、项目纪律 1(project-type-prompt)、状态栏 2(market-ticker¹/statusline-combined)、自动化 5(autopilot-* 3 + auto-validate + register-process);¹market-ticker 未挂 settings,下游为中邮资管 market-data 守护文档引用(手动工具,勿删) |
 | commands/ | 0 | 已废弃(运行位无此机制) |
