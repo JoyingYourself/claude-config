@@ -9,7 +9,7 @@ TICKER_FILE="$HOME/.cache/market-dash/ticker.txt"
 NAV_LINE_FILE="$HOME/.cache/market-dash/nav_line.txt"
 PID_FILE="$HOME/.cache/market-dash/ticker.pid"
 NAV_PID_FILE="$HOME/.cache/market-dash/nav_estimator.pid"
-DAEMON_DIR="/Users/junye_shi/中邮资管/中邮金市/target_list/产品净值/market-data"
+DAEMON_DIR="/Users/junye_shi/中邮资管/中邮金市/产品投后维护/产品净值/market-data"
 
 # --- 项目类型三态行(读状态文件, 与 hook 判定联动) ---
 ptype_line() {
