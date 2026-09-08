@@ -13,7 +13,7 @@
 | settings.json | 存在 | ✅ 同步(私有仓库可入库,0908 拍板) |
 | settings.local.json | 存在(本机私有) | 不入库,每机独立 |
 | hooks/ | 12 个生效脚本 | ✅ 同步 |
-| skills/ | 56 项(直写 27 归仓库 + lark-* 28 链接(feishu 上游)+ 其他) | 仓库管直写部分;链接归上游 |
+| skills/ | 55 项 = 直写 27(归仓库)+ lark-* 28 链接(feishu 上游) | 仓库管直写;链接归上游;2026-09-08 清理 14 个工作区/废弃残留 |
 | workflows/ | 空 | 业务工作流归业务工作区,全局不驻留 |
 | commands/ | 空(已废弃) | — |
 | plugins/ projects/ sessions/ 等 | Claude Code 运行时数据 | 不入库 |
