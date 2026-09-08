@@ -1,251 +1,554 @@
-# 量化研究教训库
+# 量化研究教训库（压缩版）
 
-## 2026-07-19 — 用户未明确授权时不得删除/修改 cron 任务
+> 完整原文备份：`lessons.md.bak-*`。本压缩版用于快速注入和关键词匹配。
+> 写入规则、Rule Promotion 机制见 CLAUDE.md § 自进化记忆系统。
 
-**场景**: 用户多次收到 cron `dda3fd14`(每5分钟心跳监控)注入的消息，对重复出现表示疑惑。Claude 在用户未说"删掉"的情况下直接调 CronDelete 删除。
-**错误**: 用户说"别删啊，我靠我有用的啊"——cron 是用户主动注册的重要定时任务，Claude 把"用户注意到它在重复触发"错误理解为"用户想删除它"。
-**根因**: cron 注入到对话中看起来像"用户发的消息"，Claude 把解释性的表达（"这个 cron 每 5 分钟触发"）当成删除授权。用户没有说"删掉"就绝对不能删。
-**规则**:
-1. **删除/修改 cron 任务前，必须等用户明确说"删"/"删掉"/"取消"/"停掉"等关键词。** 用户表达疑惑、询问、或描述 cron 行为 ≠ 授权删除。
-2. 用户注册的 cron（包括 durable）都是用户知情的自动化安排，Claude 不得假设其为"噪音"而擅自清理。
-3. 如果想让用户注意到 cron 的存在并建议处理，先告知用户并**明确询问"要删吗？"**，等用户肯定回复后再动手。
-**标签**: #cron #用户交互 #权限
+## KEYWORDS INDEX
+
+| 关键词 | 匹配教训（domain/date） |
+|--------|----------------------|
+| MCP, timeout, 超时, server, 服务器 | MCP/2026-07-19a, MCP/2026-07-19b, MCP/2026-07-12, MCP/2026-07-20 |
+| Moor, 重启, 自启, 服务器挂, disabled | MCP/2026-07-20 |
+| 交付, 自检, 完成, done, 报告 | Delivery/2026-07-27, Delivery/2026-07-27b, Delivery/2026-07-22, Delivery/2026-07-20, Delivery/2026-07-24 |
+| 图表, chart, 净值曲线, 渲染, 可视化, 长度 | Delivery/2026-07-27b |
+| 架构, design, 设计, 重构, refactor | Arch/2026-07-24a, Arch/2026-07-10a, Arch/2026-07-10b, Arch/2026-07-22 |
+| 数据, data, 验证, validate, innercode, 路径, dedup, 去重, concat, 批跑, batch | Data/2026-07-24a, Data/2026-07-24b, Data/2026-07-24c, Data/2026-07-10, Data/2026-07-13a, Data/2026-07-18, Data/2026-07-10, Data/2026-08-09, Data/2026-07-27 |
+| 用户, user, 交互, 确认, 猜测, ask | UX/2026-07-19, UX/2026-07-13, UX/2026-07-21 |
+| skill, 阶段, stage, gate, 跳过 | Delivery/2026-07-24 |
+| 因子, factor, 回测, backtest, 测试, test | Arch/2026-07-11b, Data/2026-07-10, Arch/2026-07-10a, Factor/2026-08-16 |
+| NaN, IC异常, winsorize, 缩尾, 零膨胀, 因子测试 | Factor/2026-08-16 |
+| write, edit, 修改, 覆盖, overwrite, 文件, file | Data/2026-07-24a, Data/2026-07-24b, Arch/2026-07-24a |
+| 指数, index, benchmark, 基准, duckdb | Data/2026-07-13a |
+| 模板, template, variant | Data/2026-07-24c |
+| 离线, 部署, wheel, 依赖闭包, offline_packages, 打包 | Delivery/2026-08-19 |
+| 文档, 文档同步, README, 配置同步, 维护, 同步引用 | Delivery/2026-08-20 |
+| cron, 定时, 删除 | UX/2026-07-19 |
+| 重构, refactor, 删除, 引用, grep, ReferenceError, is not defined, head 截断 | Tech/2026-08-26 |
+| obsidian, vault, 笔记 | Obsidian/2026-07-10a, Obsidian/2026-07-10b |
+| 代理, proxy, 网络, Connection refused, getproxies, no_proxy, 数据源全挂 | Net/2026-08-20 |
+| Electron, notion, 白屏, 转圈, 打不开, Cookies, token_v2, state.json, 重登 | Tech/2026-09-06 |
 
 ---
 
-## 2026-07-12 — MCP 客户端超时 30s 不可配置，compose_packages 必超时 ⚠️ SUPERSEDED by 2026-07-19
+# MCP/Timeout
 
-**更新 2026-07-19 (决策16)**: 此条教训的根因判断已被推翻。MCP 工具调用超时由 `MCP_TOOL_TIMEOUT` 环境变量控制（默认 60s），不是硬编码 30s。三层配置（Claude Code env + .mcp.json + Moor DB）已全部调到 600s，compose_packages 不再受 3 包限制。此教训保留作为历史记录，但其规则（≤3包、长任务走本地脚本）不再生效。新规则见下方 2026-07-19 条目。
+## [MCP] 2026-07-19a — MCP_TIMEOUT ≠ MCP_TOOL_TIMEOUT
 
-**场景**: data_Gil.compose_packages 多包(5+) SQL生成+DuckDB执行超过30s，客户端断开返回 -32603:request timed out。settings.json 无 mcpServerTimeout 字段。
-**根因**: ~~Claude Code MCP 客户端硬编码 30s 超时，不可配置~~ → **已推翻**。实际是 `MCP_TOOL_TIMEOUT` 默认 60s 未配置，且混淆了 `MCP_TIMEOUT`（服务器启动超时 30s）与 `MCP_TOOL_TIMEOUT`（工具调用超时 60s）。
-**规则**: ~~1. compose_packages 限 ≤3 包~~ → 已废弃。~~2. 批量回测/因子测试走本地脚本~~ → 已废弃。新规则见 2026-07-19 条目。
-**标签**: #MCP #超时 #compose #工作流 #SUPERSEDED
-> **本文件 (`~/.claude/lessons.md`) 存储跨项目通用教训。**
-> 项目特定偏好/约束请写入项目 `MEMORY.md`。
+trigger_patterns:
+  tool_keywords: []
+  file_patterns: []
+  mcp_servers: ["data_Gil", "factor_Gil", "backtest_Gil", "report_Gil"]
+
+> WHEN: MCP 工具调用超时
+> RULE: 先 `echo $MCP_TOOL_TIMEOUT` 确认当前值；怀疑超时→第一步 curl 直连服务端验证，区分客户端 vs 服务端超时。三层配置（env + .mcp.json + Moor DB）需全部调到位且重启 Claude Code。
+> TAGS: #MCP #超时 #调试
+
+## [MCP] 2026-07-19b — compose_packages 超时 → 先查产物
+
+trigger_patterns:
+  tool_keywords: []
+  file_patterns: []
+  mcp_servers: ["data_Gil"]
+
+> WHEN: 任何会产生文件产物的 MCP 调用超时
+> RULE: 第一步 `ls -lt ~/.gil_datasets/`（或对应输出目录）检查最新文件时间戳。匹配调用时间 → 可能已成功，直接用。产物不存在 → 再考虑重试。禁止盲重试。
+> TAGS: #MCP #超时 #调试
+
+## [MCP] 2026-07-12 — MCP 超时三步排查
+
+trigger_patterns:
+  tool_keywords: []
+  file_patterns: []
+  mcp_servers: ["data_Gil", "factor_Gil", "backtest_Gil", "report_Gil"]
+
+> WHEN: MCP 工具调用超时
+> RULE: ① `ls -lt` 输出目录查产物（假报错）→ ② `ps aux | grep server` 查 CPU/进程（资源竞争）→ ③ 排除①②后才考虑简化参数。禁止跳过①②直接缩范围。
+> TAGS: #MCP #超时 #诊断流程
+
+## [MCP] 2026-07-20 — Moor 重启后 Server 不自动拉起（2026-08-16 更新：已根治）
+
+trigger_patterns:
+  tool_keywords: ["pkill", "Moor", "restart", "重启"]
+  file_patterns: []
+  mcp_servers: []
+
+> WHEN: 需要重启 Moor 或其子 MCP Server；或 Moor 工具报 "Tool not found or disabled"
+> RULE: 1) 子 Server 是 Moor 的 stdio 子进程，杀掉后 Moor 标记 status='error' 且不自动拉起——先用 sqlite 重置该行（status='stopped', error_message=NULL）再重启 Moor。2) 重启 Moor：`kill $(cat "~/Library/Application Support/com.snowautumn.moor/pid")` + `open -a Moor`（2026-08-16 两次实测，WAL/DB 无损）。3) 根治已落地：settings 表 `general.autoStartServersOnLaunch=true`（2026-08-16 设置），Moor 启动即拉起全部 auto_start=1 服务器，无需 GUI 操作。4) Moor 的 /api/servers REST 需内部认证、UI 为 WebView（AX 树不可达）→ 运维路径 = sqlite 写库 + 重启，勿尝试 UI 自动化。
+> TAGS: #Moor #MCP #运维 #自启
 
 ---
 
+# Data/Validation
+
+## [Data] 2026-07-24a — 修改共享数据源前追溯所有下游消费者
+
+trigger_patterns:
+  tool_keywords: []
+  file_patterns: ["*.csv", "*.json", "*.parquet", "*.duckdb", "*.png"]
+  mcp_servers: []
+
+> WHEN: 修改任何会落盘的数据源（CSV、PNG、模板）
+> RULE: ① `grep -r <路径>` 所有引用 → ② 备份原文件或输出到临时目录 → ③ 改完立即跑端到端验证。不等到后续步骤才发现覆盖。
+> TAGS: #数据源 #下游消费者 #覆盖风险
+
+## [Data] 2026-07-24b — innercode/secucode 必须查源表验证
+
+trigger_patterns:
+  tool_keywords: ["innercode", "secucode", "指数代码", "LC_", "IndexCode"]
+  file_patterns: []
+  mcp_servers: []
+
+> WHEN: 使用任何 innercode、secucode、指数代码
+> RULE: 从 secumain/数据库查询确认，不凭记忆。配置文件中每个代码旁注释对应的 secucode 和中文名（自文档）。同一指数多处使用→确认查的是同一张源表。
+> TAGS: #innercode #数据验证 #secumain
+
+## [Data] 2026-07-24c — 多 variant 模板逐元素检查
+
+trigger_patterns:
+  tool_keywords: ["variant", "template", "模板"]
+  file_patterns: ["*.html"]
+  mcp_servers: []
+
+> WHEN: 从 base 模板创建 variant
+> RULE: 列出所有与 base 不同的元素（不只图和 AUTO 标记）→ 逐项修改 + 逐项验证 → 打开两个 variant 报告并排对比确认。不做"批量替换"。
+> TAGS: #模板 #variant #逐项检查
+
+## [Data] 2026-07-10 — 数据源路径写前核对真实产物
+
+trigger_patterns:
+  tool_keywords: ["find", "ls", "数据源"]
+  file_patterns: ["*.json", "*.csv", "*.parquet"]
+  mcp_servers: []
+
+> WHEN: 在 skill/文档里写任何"数据源路径/文件名约定"
+> RULE: 先 `find`/`ls` 核对真实文件，以实测产物为准。不同工具链的输出 schema 不能互相假设。写完用真实文件跑解析器验证。
+> TAGS: #数据 #Skill #文档
+
+## [Data] 2026-08-09 — pd.concat 后 dedup 必须验证 SELECT 包含排序列
+
+trigger_patterns:
+  tool_keywords: ["concat", "dedup", "drop_duplicates", "pd.concat"]
+  file_patterns: ["*.py"]
+  mcp_servers: []
+
+> WHEN: 写 `pd.concat([df_main, df_stib]).sort_values('infopubldate').drop_duplicates(...)` 去重代码
+> RULE: ① 验证 SQL SELECT 中包含了 sort/dedup 所需的列（EndDate, InfoPublDate）→ ② 禁止用 `if 'column' in df.columns` 做静默跳过守卫（列缺失应报错而非跳过 dedup）→ ③ 优先封装 `safe_concat_main_stib()` 到 shared utils，从源头消除遗漏。形式上写了 dedup ≠ 实际上执行了 dedup。触发了 README 2026-08-06 踩坑记录但未从根本上防范——缺少列导致整行被静默跳过。
+> TAGS: #数据 #dedup #concat #静默跳过 #shared_utils
+
+## [Data] 2026-08-09b — 一司一期多行: 业务粒度 partition + 时间列 DESC 去重
+
+trigger_patterns:
+  tool_keywords: ["partition", "PIT", "去重", "一司一期", "ProposalSN"]
+  file_patterns: []
+  mcp_servers: []
+
+> WHEN: 处理聚源财务/行情表一司一期多行数据
+> RULE: ① 按字典主键派生业务粒度 partition (财务 CompanyCode,EndDate; 行情 InnerCode,TradingDay) → ② 按业务时间列 DESC (InfoPublDate/TradingDay) → ③ ①②仍区分不了 → 维护时间 DESC。特例：分红同键多 ProposalSN → SUM；无唯一索引表照①②③。维护时间只能进③级。
+> TAGS: #数据 #PIT #去重
+
+## [Data] 2026-07-13a — 本地 DuckDB 指数库优先
+
+trigger_patterns:
+  tool_keywords: ["DuckDB", "IndexMarket", "LC_INDEXBASICINFO"]
+  file_patterns: ["*.duckdb"]
+  mcp_servers: []
+
+> WHEN: 需要获取指数行情数据
+> RULE: 优先查本地 DuckDB `~/Scholarship is a new sexy/指数数据/IndexMarket.duckdb`。找不到再走外部 API。匹配：中文名→`LC_INDEXBASICINFO.INDEXABSTRACT` 模糊搜索→筛选 PTYPE=2 AND DESIGNDTYPE=2（真全收益）→ 排除港股版。交叉验证：全收益累计 > 价格累计。
+> TAGS: #指数数据 #DuckDB #本地数据库
+
+## [Data] 2026-07-18 — chinapostamc 两套 MCP 系统数据范围不同
+
+trigger_patterns:
+  tool_keywords: []
+  file_patterns: []
+  mcp_servers: ["chinapostamc_strategy_actual", "chinapostamc_strategy_callback"]
+
+> WHEN: 使用 chinapostamc 的 actual 或 callback MCP 系统
+> RULE: actual 系统 → 先 `list_available_dates` 确认策略有估值表。callback 系统 → 先 `list_strategies` 确认策略在回测数据库中。不要假设"路演讲的是 X 策略，系统里就有 X 策略的数据"。
+> TAGS: #MCP #数据源 #chinapostamc
+
+---
+
+## [Data] 2026-07-27 — 批跑脚本不擅自修改，遇问题先汇报
+
+trigger_patterns:
+  tool_keywords: ["python", "batch", "run", "批跑"]
+  file_patterns: ["*.py"]
+  mcp_servers: []
+
+> WHEN: 执行批跑任务时脚本报错
+> RULE: ① 遇 rc≠0 → 收集错误信息 → 汇报用户 → 等待指示 ② 不改用户的工作区脚本逻辑（数据加载/策略参数/输出路径），仅允许改日期和通用路径 ③ 在用户明确授权前，不修改任何【定稿】或 TEMPLATE 脚本
+> TAGS: #批跑 #脚本修改 #用户确认
+
+---
+
+# Delivery/SelfCheck
+
+## [Delivery] 2026-07-27 — 交付 = 原始需求逐条核对，不是"没报错"
+
+trigger_patterns:
+  tool_keywords: []
+  file_patterns: []
+  mcp_servers: []
+
+> WHEN: 任何任务交付给用户前
+> RULE: ① 接收多步骤需求 → 先用自己的话复述每个步骤产出，确认理解一致再执行 ② 遇到阻塞 → 换方案或向用户说明，不允许标记"待补"跳过 ③ 交付前自检清单 = 原始需求逐条对照（不是只看断链/数字/文件存在）。违反次数已达多次，这是最核心的行为规则。
+> TAGS: #交付规范 #自检 #需求理解
+> ⚠️ trigger_patterns 待补(全空, Hook 无法触发)
+
+## [Delivery] 2026-07-27b — 图表/可视化 bug 修复后必须提取渲染数据逐点验证
+
+trigger_patterns:
+  tool_keywords: []
+  file_patterns: ["*.html", "*.png"]
+  mcp_servers: []
+
+> WHEN: 用户反馈图表/曲线/可视化有视觉问题（长度不对、缺线、错位等）
+> RULE: 修复后不要只跑脚本看有无报错就汇报完成。必须从生成的 HTML/CSV 中提取实际渲染数据（ECharts navData/bmNavData 等），逐点对比产品线和基准线的日期/数值/点数，确认完全一致后再交付。修表面症状不验证渲染产物 → 漏掉深层不一致。
+> TAGS: #图表 #净值曲线 #端到端验证 #逐点对比
+
+## [Delivery] 2026-07-22 — 分级 DONE 框架
+
+trigger_patterns:
+  tool_keywords: []
+  file_patterns: []
+  mcp_servers: []
+
+> WHEN: 任何任务启动时
+> RULE: 锁定目标级别 — L1 语法级（可运行）→ L2 测试级（+测试通过）→ L3 行为级（+端到端真实验证）→ L4 交付级（+自检清单 PASS）→ L5 分析级（+量化推导支撑）。不可越级宣布完成，不可降级交差。
+> TAGS: #工程规范 #完成标准 #DONE
+> ⚠️ trigger_patterns 待补(全空, Hook 无法触发)
+
+## [Delivery] 2026-07-20 — 报告类交付物交付前必须自检
+
+trigger_patterns:
+  tool_keywords: []
+  file_patterns: ["*report*.html", "*报告*.html"]
+  mcp_servers: []
+
+> WHEN: 生成报告类交付物（HTML/PDF/图表）后
+> RULE: 数据层自检（正则解析 HTML — 行数/日期/一致性）每次必做。视觉层（Chrome 截图 + vision bridge — 排版/重叠/可读性）涉及图表修改或首次生成时必做。未全部 PASS → 修复后重新生成，不得跳过直接交付。
+> TAGS: #交付 #自检 #报告
+
+## [Delivery] 2026-07-24 — Skill 阶段不可跳过
+
+trigger_patterns:
+  tool_keywords: ["Skill", "SKILL.md"]
+  file_patterns: []
+  mcp_servers: []
+
+> WHEN: 执行 Skill（/ 命令），尤其是看到任务规模大时
+> RULE: 按阶段顺序执行，每阶段完成后对照 Gate checklist 自查。不能被规模吓到走捷径。时间/Token 不够 → 告知用户当前进度，请求决策（继续/缩减范围/分批），而非静默降级质量。
+> TAGS: #Skill执行 #阶段门禁 #流程遵守
+
+## [Delivery] 2026-08-20 — 改共享配置必须同步文档引用：README 是下游消费者
+
+trigger_patterns:
+  tool_keywords: ["同步文档", "更新配置", "文档同步", "README", "维护说明"]
+  file_patterns: ["common.py", "README.md", "*配置*.py", "*维护说明*", "*.md"]
+  mcp_servers: []
+
+> WHEN: 修改 common.py 中的共享配置（EXTRAPOLATE_SOURCES / PRODUCT_CONFIGS / BENCHMARK_CONFIGS 等）后 / 交付"文档已维护/README 维护好了"类声明前
+> RULE: 修改共享配置后，必须 grep README 及所有 .md 文档中引用该配置的代码块/表格并逐项核对一致；交付文档维护声明前，逐条核对文档代码块与实际实现（禁止凭印象声明"已维护"）。本次教训：外推配置 2→6 指数时 README 代码块未同步，若用户未追问将长期残留。区别于 [[Data/2026-07-24a]]（数据源下游消费者）——本教训是文档-实现一致性。
+> TAGS: #交付 #文档同步 #配置同步 #审计盲区
+
+---
+
+# Architecture/Design
+
+## [Arch] 2026-07-24a — 改架构前先理解为什么是现在这样
+
+trigger_patterns:
+  tool_keywords: []
+  file_patterns: ["*.py", "*.sh", "*.json"]
+  mcp_servers: []
+
+> WHEN: 看到 Bug 或"不够好"的设计，想动手改
+> RULE: 先问：这个模块为什么设计成现在这样？谁做的、什么时候、什么原因。答案不清楚 → 先问用户，不猜。改动范围 = 问题的影响范围，不扩展到"顺带优化"。
+> TAGS: #架构理解 #改动范围 #先问为什么
+
+## [Arch] 2026-07-24b — 一改一验，不攒到最后
+
+trigger_patterns:
+  tool_keywords: []
+  file_patterns: ["*.py", "*.sh", "*.json", "*.md"]
+  mcp_servers: []
+
+> WHEN: 连续做多个代码改动
+> RULE: 一个逻辑改动 = 一次 run + 一次验证（至少看关键指标变化）。不通过 → 修好再改下一个。不要因为"跑一次要 2 分钟"就跳过（2 分钟 < 2 小时排查）。改完一个模块先 commit 作为回退点。
+> TAGS: #一改一验 #独立验证 #bug遮蔽
+
+## [Arch] 2026-07-22 — 实施前 6 轴扫描
+
+trigger_patterns:
+  tool_keywords: []
+  file_patterns: []
+  mcp_servers: []
+
+> WHEN: 非平凡实现任务（预计 >3 文件或 >1 小时），写代码前
+> RULE: 内部分析 6 轴：① 假设审计（依赖了哪些未验证假设？）② 范围边界（用户真正要求了什么？）③ 已有方案（能不能复用？）④ 极简路径（删掉一步还能完成吗？）⑤ 不确定性（哪步不可预测？预案？）⑥ 连锁影响（改完 hook/cron/MCP Server 还正常吗？）。≥2 轴有问题 → 先和用户对齐。
+> TAGS: #工程规范 #计划 #审查 #防盲区
+> ⚠️ trigger_patterns 待补(全空, Hook 无法触发)
+
+## [Arch] 2026-07-10a — 穿行测试不能用现成正确产物当输入
+
+trigger_patterns:
+  tool_keywords: ["test", "测试", "穿行"]
+  file_patterns: ["*.py"]
+  mcp_servers: []
+
+> WHEN: 做端到端测试验证
+> RULE: 判据 = 被测系统自产的终值 == 黄金基线（不是"下游能读入中间产物"）。穿行测试的中途输入禁止用外部已知正确产物喂入。有平行忠实副本时更要警惕——副本能跑会制造"已复现"假象并供养伪验证。
+> TAGS: #测试 #穿行测试 #验证
+
+## [Arch] 2026-07-10b — 别让审计报告的叙事框架框定任务目标
+
+trigger_patterns:
+  tool_keywords: ["audit", "审计"]
+  file_patterns: []
+  mcp_servers: []
+
+> WHEN: 接手一个任务，手里有一份审计/缺陷报告
+> RULE: 先分清"任务目标"与"手头文档的叙事框架"——用一句话向用户确认"我们要的是 X 通用能力，还是复刻 Y 具体成品"。通用框架的验收判据 = 自产合理（数据全 loaded、因子非空、筛选真生效），绝不锚定某具体策略的精确数字。
+> TAGS: #架构 #方向 #通用框架
+
+## [Arch] 2026-07-11a — 新建 Skill/MCP 必须先调工程类 Skill
+
+trigger_patterns:
+  tool_keywords: ["skill", "mcp", "SKILL.md", "moor.db"]
+  file_patterns: ["SKILL.md"]
+  mcp_servers: []
+
+> WHEN: 新建或修改 Skill/MCP 文件
+> RULE: MCP → 先 `EngineeringMCP_Scaffold`（读规范→关 Moor→写 moor.db+Profile→重启验证）。Skill → 先 `EngineeringSkill_Scaffold`（命名公式+查重→6 步含穿行测试）。禁止 `claude mcp add` 和手写 SKILL.md。识别信号：涉及 `~/.claude/skills/`、`moor.db`、SKILL.md → 先想"有没有对应 scaffold skill"。
+> TAGS: #Skill #MCP #Moor #scaffold
+
+## [Arch] 2026-07-11b — 组合因子缺口修共享派生层一次
+
+trigger_patterns:
+  tool_keywords: ["factor", "因子", "enrich"]
+  file_patterns: ["*.py"]
+  mcp_servers: ["factor_Gil", "backtest_Gil"]
+
+> WHEN: 发现多个平行引擎（test_factor、run_pipeline）各有同样缺口
+> RULE: 修共享派生层一次（enrich），在每个引擎"取数后、求值前"接钩子。两个数据源列名可能不同 → 富集层做角色→前缀解析，不硬编码前缀。组合因子、TTM、单季派生都走 enrichment layer，不逐引擎打补丁。
+> TAGS: #架构 #因子 #单一事实源
+
+---
+
+# Factor/因子测试
+
+## [Factor] 2026-08-16 — NaN IC 是 bug 信号：下钻中间量，禁止聚合掩盖
+
+trigger_patterns:
+  tool_keywords: ["compare_factors", "test_factor", "ic_mean", "winsorize", "缩尾", "nan", "因子异常", "股息率"]
+  file_patterns: ["factor_Gil/server.py", "factor_monitor.py"]
+  mcp_servers: ["factor_Gil"]
+
+> WHEN: 因子 IC 测试/监控出现 NaN、全零截面或"数据异常"
+> RULE: 1) NaN 是 bug 信号不是数据噪声——禁止用 nanmean/跳过聚合掩盖，必须定位到退化期。2) 排查顺序：逐期 IC 序列（找 NaN 期）→ 该期截面分布（零值占比/唯一值/std）→ winsorize/中性化中间量（med/mad/clip 区间）。3) 零膨胀因子（股息率类，零值占比>50%）MAD 缩尾退化：med=0→mad=0→clip(0,0) 压成常数→spearman=NaN；修复=缩尾加 mad>0 守卫，不改聚合。4) 定位方法：用原始数据一比一复刻服务端管线（SQL→dropna→winsorize→merge→corr）逐步比对中间量。
+> TAGS: #因子 #IC #NaN #winsorize #零膨胀 #factor_Gil
+
+---
+
+# Obsidian/Vault
+
+## [Obsidian] 2026-07-10a — 所有回测结果必须记录到 Obsidian Vault
+
+trigger_patterns:
+  tool_keywords: ["backtest", "回测", "output"]
+  file_patterns: []
+  mcp_servers: ["backtest_Gil"]
+
+> WHEN: 回测完成（任何策略/因子）
+> RULE: 立即将结果写入对应策略笔记的"回测结果"表格。所有结果都记录（包括表现差的，标注原因避免重蹈覆辙）。总览文件维护"回测结果汇总"表。废弃分支不删除，标记 🟡/🔴 并说明原因。
+> TAGS: #回测 #Obsidian #Vault
+
+## [Obsidian] 2026-07-10b — Obsidian vault 必须含 .obsidian 配置
+
+trigger_patterns:
+  tool_keywords: ["vault", "obsidian", ".obsidian"]
+  file_patterns: []
+  mcp_servers: []
+
+> WHEN: 创建新的 Obsidian vault
+> RULE: 每个 `vault/` 建 `.obsidian/`（core-plugins 至少含 canvas/graph/file-explorer）使其可独立打开。`.obsidian/` 和 `.canvas` 绝不 chmod 444（Obsidian 运行时需写入）。只锁 `.md`。注册用 UI「Open folder as vault」，不脚本改 obsidian.json。
+> TAGS: #Obsidian #Vault #Canvas
+
+---
+
+# UserInteraction
+
+## [UX] 2026-07-19 — 用户未明确授权不得删除/修改 cron
+
+trigger_patterns:
+  tool_keywords: ["cron", "CronCreate", "CronDelete"]
+  file_patterns: []
+  mcp_servers: []
+
+> WHEN: 考虑删除或修改 cron 任务时
+> RULE: 必须等用户明确说"删"/"删掉"/"取消"/"停掉"。用户表达疑惑 ≠ 授权删除。先告知用户并明确询问"要删吗？"，等肯定回复后再动手。
+> TAGS: #cron #用户交互 #权限
+
+## [UX] 2026-07-13 — 用户没给的信息直接问，禁止猜测
+
+trigger_patterns:
+  tool_keywords: []
+  file_patterns: []
+  mcp_servers: []
+
+> WHEN: 数据找不到或输入信息不完整
+> RULE: 精确匹配失败 → 诚实告知，列出搜到的相近项（名称、代码、起止日期），让用户选择。禁止自行选替代。所需输入不完整 → 停止，逐项提问。禁止猜测路径、假设指数列表、用"默认"时间区间。
+> TAGS: #用户交互 #数据准确性
+> ⚠️ trigger_patterns 待补(全空, Hook 无法触发)
+
+## [UX] 2026-07-21 — 不要先贴标签再找理由（盲目标⭐）
+
+trigger_patterns:
+  tool_keywords: []
+  file_patterns: []
+  mcp_servers: []
+
+> WHEN: 需要做判断/推荐/标注时
+> RULE: 用户没要求的结论不要加。有量化依据 → 先展示推导再标注，标注附带推导链接。绝不允许"先标⭐，被问到了再找理由"。"五个取中间"不是分析——选最优需要定义目标函数，没定义就不要选。
+> TAGS: #分析边界 #过度输出
+> ⚠️ trigger_patterns 待补(全空, Hook 无法触发)
+
+---
+
+# macOS/通知（技术备忘）
+
+## [Tech] 2026-07-21 — macOS 脚本通知方案
+
+trigger_patterns:
+  tool_keywords: ["notification", "notify", "通知"]
+  file_patterns: ["*.sh", "*.swift"]
+  mcp_servers: []
+
+> WHEN: 需要从脚本发 macOS 通知
+> RULE: 使用 Swift 原生 app + UNUserNotificationCenter（`swiftc` 编译 ARM64 `.app` bundle，Info.plist 配置 CFBundleIdentifier + LSUIElement）。点击回调 = UNUserNotificationCenterDelegate。消息持久化 = 先写 `.last_notification.txt`。launchd 调 Binary 比 `open -a` 更可靠。
+> TAGS: #macOS #通知 #Swift
+
+---
+
+# Delivery/部署交付
+
+## [Delivery] 2026-08-19 — 能跑的代码 ≠ 能部署的包: 验证必须走目标环境依赖闭包
+
+trigger_patterns:
+  tool_keywords: ["离线", "offline_packages", "wheel", "依赖闭包", "dry-run", "部署", "打包"]
+  file_patterns: ["offline_packages/*", "requirements.txt", "*部署*.md", "*安装*.md"]
+  mcp_servers: []
+
+> WHEN: 离线交付打包前 / offline_packages 或 requirements 变更后 / 部署前验证
+> RULE: 任何离线交付必须做交叉平台依赖闭包验证: `pip install --dry-run --ignore-installed --platform win_amd64 --python-version 3.13 --only-binary=:all: --no-index --find-links=offline_packages <依赖>` 确认 Would install 完整列表无缺失。开发机预装包(Anaconda)会掩盖离线包缺失——能跑不等于能装。审计/验证必须包含交付维度(目标环境可安装性), 不能只验证开发环境运行行为。
+> TAGS: #交付 #离线部署 #依赖闭包 #审计盲区
+
+---
+
+# Net/网络
+
+## [Net] 2026-08-20 — 数据源全挂:先 curl 直测区分"源挂 vs 代理/网络层"
+
+trigger_patterns:
+  tool_keywords: ["getproxies", "no_proxy", "7890"]
+  file_patterns: ["*benchmark.py", "*ticker_daemon.py", "*nav_estimator.py", "*providers.py", "*deepseek_client.py", "*github_weekly.py", "*gov_weekly.py", "*discover.py"]
+  mcp_servers: []
+
+> WHEN: Python 脚本/报告全部外部数据源(指数/行情/API)拉取失败,且浏览器/curl 正常
+> RULE: ① 先 curl 直测同一 URL——通 = 问题在 Python 网络层(优先查 macOS 系统代理残留),不通 = 数据源真挂。② 定位: `python3 -c "import urllib.request; print(urllib.request.getproxies())"` + `nc -z 127.0.0.1 7890` 探测残留代理端口。③ 修复: 代理健康自适应(socket 探测端口,死→ os.environ['no_proxy']='*',活→不动);探测端口已支持 `PROXY_PORT` 环境变量覆盖(默认 7890,2026-08-20 起 8 处补丁均为此版本,端口变更无需改代码)。urllib/requests/httpx 三库均读系统代理,no_proxy='*' 对三者生效(实测)。④ 常驻进程(daemon/server)启动时固化代理,补丁后必须重启;localhost 请求不受代理影响。⑤ 已带自适应补丁的文件: 定稿报告 common.py、看板 benchmark.py、market-data 双 daemon、vision-bridge providers.py、新闻周报 5 脚本 — 修改这些文件时勿破坏双态逻辑。
+> TAGS: #网络 #代理 #macOS #排查流程
+
+
+
+## [Data] 2026-08-20b — 归档多个同名文件前必须检查目标冲突:mv 同名覆盖不可逆
+
+trigger_patterns:
+  tool_keywords: ["mv ", "归档"]
+  file_patterns: ["*_archive*", "*归档*", "*.bak*"]
+  mcp_servers: []
+
+> WHEN: 移动/归档多个文件到同一目录(批量 mv/cp)
+> RULE: ① 执行前先 `ls` 目标目录 + `ls` 全部源文件,检查同名冲突;多个同名源文件 → 分目录放或加来源后缀(如 `update_factsheet_DividendQuality.py`)。② 批量移动前先 `cp` 备份到临时目录,再 mv。③ mv 同名覆盖静默发生、不可逆(无 Time Machine 用户快照时无法恢复,实测 2026-08-20:3 个同名 update_factsheet.py 归档 → 2 个被覆盖永久丢失);一次 ls 的成本 << 不可逆丢失的代价。
+> TAGS: #文件操作 #归档 #mv覆盖 #备份
+
+---
+
+## [Data] 2026-08-25 — 树形科目求和必须只累加末级:startswith 前缀累加会重复计数 5 倍
+
+trigger_patterns:
+  tool_keywords: ["get_cash_position", "get_summary", "闲置资金", "total_cash", "货币资金", "估值表", "科目", "重复计数", "现金"]
+  file_patterns: ["*Strategy_Actual*", "*估值表*", "*valuation*", "*parser*.py"]
+  mcp_servers: ["chinapostamc_strategy_actual"]
+
+> WHEN: 解析估值表(或任何树形科目编码)计算现金/资产金额 / 新增估值表字段或工具
+> RULE: ① 科目为多级树(1002→1002.01→…→1002.01.01.01.086.ZGYZCXYH),父级金额=子级汇总,
+    用 startswith 前缀匹配后逐层累加必重复计数(实测 2026-08-25:红利质量现金 153,787.52
+    被算成 771,869.69,误差 5 倍)——必须只累加末级科目(不存在 `code + "."` 前缀子科目的行)。
+    ② 金额结果必须交叉验证:估值表恒等式 资产合计 − 股票市值 = 现金
+    (105,276,884.52 − 105,123,097.00 = 153,787.52 精确吻合)。
+    ③ 股票持仓解析需同样注意叶子过滤(层级深度 count(".") 约束),父级行如
+    1101.01.01.01.001 上交所 不可计入。
+> TAGS: #MCP #估值表 #树形科目 #重复计数 #交叉验证
+
+---
+
+## [Tech] 2026-08-26 — 删除定义前 grep 引用禁止截断:head 漏尾部引用致运行时 ReferenceError
+
+trigger_patterns:
+  tool_keywords: ["grep", "删除", "重构", "ReferenceError", "is not defined", "引用", "head", "截断"]
+  file_patterns: ["*.js", "reproduce-batch.js", "*.py"]
+  mcp_servers: []
+
+> WHEN: 删除/重命名函数/变量/常量定义或整段代码 / 重构后运行报 ReferenceError: xxx is not defined
+> RULE: ① 删除任何定义前, grep 全部引用——禁止带 head/tail 截断(截断即漏检:
+    2026-08-26 R38 删除 Phase 1 组级代码连带删 gDefs, 删除前 grep -n "gDefs" | head -10
+    只显示 Phase 1 段引用, 漏了 Phase 4 发布段 L618/L620 → Workflow 跑 59 agents/3.3M token
+    后在 Publish 段崩溃 ReferenceError: gDefs is not defined)。
+    ② 删除后立即 grep -c <符号名> 确认代码引用归零(注释残留可接受, 须区分)。
+    ③ 删除/重命名符号后, 除 node --check/包裹法外, 加"符号存在性"检查:
+    grep -n <符号名> 输出定义处 1 次 + 引用处逐一核对——语法检查查不出运行时符号缺失。
+    ④ 查引用用 grep -c 看总数 + grep -n 全量核对, 不要用 head 先看几条就动手。
+> TAGS: #重构 #grep检查 #引用漏检 #ReferenceError #R40 #删除代码
+
+---
+
+## [Tech] 2026-09-06 — Electron桌面App(Notion)白屏/转圈:先验登录会话,再查缓存网络
+
+trigger_patterns:
+  tool_keywords: ["notion", "Cookies", "token_v2", "state.json", "--enable-logging", "Partitions/", "Logs/Notion"]
+  file_patterns: ["*Notion/state.json", "*Notion/Partitions/*", "*Notion/notion.db*", "*Logs/Notion*"]
+  mcp_servers: ["notion"]
+
+> WHEN: Electron 桌面 App(Notion 等)白屏/错误页/无限转圈, 网页版正常
+> RULE: 排查顺序固定: ① 登录会话 — 升级后旧会话失效是高频主因, 删
+>      ~/Library/Application Support/<App>/Partitions/<app>/Cookies 强制重登(最快见效)
+>      → ② 网络/代理分流(系统代理把 App 流量送慢节点) → ③ 缓存/Service Worker。
+>      旁证: 网页未登录访问私人页返回 400 restricted 是正常现象, ≠ 页面损坏;
+>      MCP/API 能读 ≠ 用户会话能读。抓 renderer 真相用 --enable-logging=stderr
+>      启动读 console (BootDataError / missingSpacePointer = 会话问题)。
+> TAGS: #Tech #Electron #Notion #白屏 #登录会话 #重登
+
+---
 ## 写入规则
 
 ### 何时写入
-
-以下任一条件满足时，主动追加一条教训：
 - 用户指出错误或纠正方向
 - 同一个操作连续失败 2 次以上
 - 用户说"记住这个"、"下次别这样"
 - 回测/因子测试结果与预期严重不符，且找到了根因
 
-### 写入格式
-
+### 写入格式（压缩版）
 ```markdown
-## YYYY-MM-DD — 简短标题
-
-**场景**: 在做什么任务时触发的
-**错误**: 具体犯了什么错
-**根因**: 为什么会犯这个错
-**规则**: 以后应该怎么做（具体、可执行、一条原则）
-**标签**: #因子 #回测 #数据 #模型 #风控
+## [DOMAIN] YYYY-MM-DD — 标题
+> WHEN: 触发场景
+> RULE: 一条可执行规则
+> TAGS: #tag1 #tag2
 ```
 
 ### 存储决策
+所有教训统一存储在 `~/.claude/lessons.md`（全局唯一池），通过 trigger_patterns 自动筛选适用范围。
 
-| 教训范围 | 写入位置 |
-|---------|---------|
-| 跨项目通用 (如"PE在金融股上失效") | `~/.claude/lessons.md` |
-| 当前项目特定 (如"红利2号基准=18011") | `./memory/MEMORY.md` |
-
-### 去重
-
-写入前检查是否已有类似教训。若已有 → 更新旧条目（标记 superseded），不创建重复条目。
-
-### 更新而非追加
-
-同类教训的更新：在旧条目下方追加 `**更新 YYYY-MM-DD**: ...`，保留演进历史。
-
----
-
-## 教训列表
-
-<!-- 实际教训在下方按日期倒序追加。首次使用时仅含模板。 -->
-
-## 2026-07-19 — MCP 超时误判：混淆 MCP_TIMEOUT 与 MCP_TOOL_TIMEOUT，未做 curl 直连验证
-
-**场景**: MCP_Migration 项目自 2026-07-08 起以"MCP 30s 硬超时"为前提做架构设计——factor_Gil 6 个核心工具被禁止走 MCP、compose 限 ≤3 包、CLAUDE.md 大量超时防控规则。用户质疑"30s 是协议硬限制还是 Moor 可调整"，curl 直连 Moor 调用 test_factor 36 期耗时 57.8s 成功返回，才发现超时根本不在服务端。
-**错误**: 整个项目架构基于一个未验证的假设运行了一个月。factor_Gil 被禁用 MCP、local_runner.py 成为必经之路、Skill 协议中写满了"MCP 必超时"的 workaround——这些决策的根因是混淆了两个环境变量。
-**根因**: 
-1. `MCP_TIMEOUT` (默认 30s) = Claude Code 等待 MCP server 启动的超时，不是工具调用超时
-2. `MCP_TOOL_TIMEOUT` (默认 60s) = Claude Code 等待单次工具调用返回的超时，这才是控制因子测试/回测超时的变量
-3. test_factor 36 期实际耗时 57.8s，刚好在 60s 默认值边缘（短区间能成功、长区间超时），强化了"30s 硬超时"的错觉
-4. 从未做过 curl 直连 Moor 的验证——如果早做，立刻就能看到 Moor 能返回 57.8s 的结果，超时在客户端不在服务端
-**规则**:
-1. **怀疑超时问题时，第一件事是 curl 直连服务端验证**——区分客户端超时 vs 服务端超时。不要假设"超时=协议硬限制"。
-2. MCP 工具调用超时 = `MCP_TOOL_TIMEOUT`（默认 60000ms），服务器启动超时 = `MCP_TIMEOUT`（默认 30000ms），两者不同。排查时先 `echo $MCP_TOOL_TIMEOUT` 确认当前值。
-3. **未验证的假设不要作为架构前提**——该项目因为一条未验证的假设，积累了一个月的 workaround（local_runner.py 强制路径、Skill 禁止 MCP、CLAUDE.md 超时防控）。修复只需 1 天，但清理 workaround 需要系统性 P0-P3 工作。
-4. 三层配置（Claude Code env + .mcp.json + Moor DB）需全部调到位，且 Claude Code 需要**重启**才能读取 env 变更。
-**标签**: #MCP #超时 #架构 #验证 #调试 #lessons-learned
-
----
-
-**场景**: 调用 `compose_packages` 获取因子测试数据集,5 包联合 SQL 查询耗时 >30s
-**错误**: MCP 返回 `-32603: request timed out` 后,连续重试 3 次(每次缩小包数量),均报超时。用户打断:"别瞎测了,直接定位问题"。检查文件系统发现第一次调用就已成功生成 parquet(时间戳匹配)
-**根因**: MCP 协议是同步 request/response,客户端超时阈值 30s,但 compose_packages 的多表 JOIN + PIT 去重 + 透视查询实际耗时 >30s。服务端异步完成并写入产物,客户端断开后**不知道服务端已成功**。我把"客户端报错"等同于"操作失败",没先检查文件系统最新产物
-**规则**: 
-1. MCP 超时后**第一步 = `ls -lt ~/.gil_datasets/`(或对应输出目录)检查最新文件时间戳**,匹配调用时间 → 可能已成功
-2. 确认产物存在后直接使用,不要重试;若产物不存在 → 再考虑缩小参数重试
-3. 通用原则:**凡是会产生文件产物的 MCP 调用超时,先查产物再判成败**,不盲信客户端报错
-**标签**: #MCP #超时 #调试 #工作流
-
----
-
-## 2026-07-12 — MCP 超时先查服务器状态(CPU/进程),排除资源竞争后再考虑简化任务
-
-**场景**: `test_factor` 超时后,连续 2 次缩小日期范围重试均超时。用户打断:"直接定位问题"。ps 发现 `factor_Gil` CPU 370%、运行 14 分钟 — 另一个窗口的任务占满服务器,我的请求根本排不进去
-**错误**: 超时后直接假设"任务太重回不来"→ 盲目简化参数(5年→2年→1年)。没有先查服务器进程状态。方向全错:瓶颈不是我的表达式复杂度,而是**服务器被其他任务独占**
-**根因**: 调试路径缺了一环。MCP 工具由单线程 Python server 提供,同一时间只能处理一个请求。超时可能是:(a) 服务端异步完成但客户端超时(假报错) (b) 服务器被其他任务吃满(资源竞争) (c) 自身任务确实太重(真瓶颈)。我跳过了 (b) 的排查,直接假设了 (c)
-**规则**: MCP 超时三步排查:
-1. **查产物** — `ls -lt` 输出目录,有新文件 → 假报错,直接用
-2. **查进程** — `ps aux | grep server` 看 CPU/运行时间,被其他任务占满 → 等或杀,不要重试
-3. **查任务** — 排除 1、2 后才考虑简化参数/表达式
-**标签**: #MCP #超时 #调试 #服务器 #诊断流程
-
-**场景**: 修复 data_Gil compose 引擎去重逻辑,处理聚源财务/行情表一司一期多行
-**错误**: 一版把维护时间(XGRQ/UpdateTime)当业务选择键;我纠正时又矫枉过正,写成"绝不用维护时间"
-**根因**: 维护时间是数据库刷库行为不是业务事实(库重建即变,不可复现),**不能作主选择**;但聚源发现错误会更正,**库内瑕疵重复时,最新维护版=更正后版本**,可作最次级兜底
-**规则**: PIT 去重**三级判别**(优先级从高到低)= ① 按字典主键(唯一索引)派生的**业务粒度** partition(财务 CompanyCode,EndDate;行情 InnerCode,TradingDay)② 按主键里的**业务时间列** DESC 选最新已披露版(InfoPublDate/TradingDay/公告日)③ ①②仍区分不了(库内瑕疵)→ **维护时间 DESC 取最新维护版**(更正后版本)。维护时间**只能进第③级,绝不进①②级**
-**特例**: (a) 分红 LC_Dividend 同 (InnerCode,EndDate) 多 ProposalSN → **累加 SUM**,非取一条;(b) 无唯一索引表(如 LC_STIBDIndiForValue)照 ①②③ 分级,第③级兜底在此正是所需
-**标签**: #数据 #PIT #去重
-
----
-
-## 2026-07-10 — 所有回测结果（含不理想的）都必须记录到 Obsidian Vault
-
-**场景**: 因子替换测试 — 将 NP 环比增长替换为 SUE0/ROE_YoY/ROE_Slope 三个因子分别回测，SUE0 大幅领先（1156% vs 432%），ROE 因子中等改善（533-560%）。
-**错误**: 之前仅在 Vault 中记录了策略脚本和定性描述，回测结果字段（Sharpe/年化收益/最大回撤等）留空。若不及时补录，后续对比因子时需重新跑回测才能获取数据。
-**根因**: 回测耗时（每策略 10-20 分钟），但重新跑回测的成本远高于记录结果的成本。不记录"不够理想"的结果会导致同一因子被重复测试，浪费算力。
-**规则**: 
-1. 每次回测完成后，**立即**将结果写入对应策略笔记的"回测结果"表格（解锁→写入→加锁流程）
-2. **所有结果都要记录**，包括表现差的因子/策略 — 表现差的也要在笔记中标注原因（如"季节性干扰""回撤过大"），避免未来重蹈覆辙
-3. 总览文件 `00-总览.md` 中维护"回测结果汇总"表格，一屏展示所有因子/策略的核心指标对比
-4. 废弃分支不删除，标记为 🟡/🔴 并保留笔记，在笔记中说明废弃原因
-**标签**: #回测 #Obsidian #Vault #工作流 #记录
-
----
-
-> **Rule Promotion**: 某条教训被触发 ≥3 次后，提示用户是否提升到 CLAUDE.md 作为永久指令。
-
-## 2026-07-10 — Obsidian vault 必须含 .obsidian 配置才能被独立打开(否则埋在总库看不到)
-
-**场景**: 修复 DocumentObsidian_Vault skill — 用户反馈"obsidian里根本看不到任何记录内容"
-**错误**: skill 只建 `<PROJ>/vault/策略/` + 笔记,不建 `.obsidian/` 配置。笔记虽在用户总 vault(中邮资管)内部,但埋在 6 层深子目录、无顶层入口/MOC、图谱孤岛,用户根本找不到。旧 SKILL 还写"用 Obsidian 打开 $PROJ_DIR"(=打开总库根),正是埋深症结。
-**根因**: 一个文件夹要成为可被 Obsidian「Open folder as vault」直接打开的独立 vault,**必须含 `.obsidian/` 配置目录**(app.json/appearance.json/core-plugins.json)。缺它 → 只能作为普通子文件夹埋在父 vault 里。
-**规则**:
-1. 每个 `vault/` 必须建 `.obsidian/`(core-plugins 至少启用 canvas/graph/file-explorer),使其可独立打开
-2. `.obsidian/` 和 `.canvas` **绝不 chmod 444**(Obsidian 要读写自身状态;Canvas 打开即写入视口/节点位置,只读→EACCES→空白渲染)。只锁 `.md`
-3. 注册 vault 用 UI「Open folder as vault」,**不要脚本改全局 obsidian.json**(Obsidian 运行时退出会覆盖)
-4. 建 `开发日志.md`(append-only)记录开发过程 = 真正的"版本管理"载体,与演进树互补
-**更新 2026-07-10**: 规则 2 原写"只锁 .md/.canvas",实测 Canvas 打开即写入 → chmod 444 立即 EACCES 放弃渲染空白。已修正为只锁 .md,Canvas 和 .obsidian/ 必须可写。锁定命令:`find "$VAULT" -type f -name "*.md" -not -path "*/.obsidian/*" -exec chmod 444 {} \;`
-**标签**: #Obsidian #Vault #Skill #Canvas #权限
-
----
-
-## 2026-07-10 — 穿行测试用"现成正确产物"当输入 = 绕过生产环节的伪端到端验证
-
-**场景**: MCP_Migration 项目, Claude 按"【定稿】中邮红利策略1号"编码分层 MCP 链路(data_Gil抽取→factor_compute→backtest_Gil组件回测), 完成后我要求执行了穿行测试+抽样校验且全部通过。数月后用定稿策略端到端复测, 发现分层链路 run_pipeline 从第一环 SQL 抽取就断裂(STIB注释吞SELECT/TTM崩/质量筛全空转), 根本复现不出定稿 829.62%。
-**错误**: 穿行测试"通过"了却没测出任何致命 bug。把"下游消费工具能加载/能取数"当成了"链路能复现"。三次穿行测试(compose抽取值对拍6/6、report_Gil加载27期输出、factor_Gil取数3690行)**没有一次调用 run_pipeline/preview_period**——而这是整个 MCP 里唯一试图从零件复现定稿的链路。
-**根因**: 穿行测试的**输入数据全部来自"已知正确的产物"**——report_Gil 加载的 pool CSV 是**独立 strategy.py 脚本生成的**(outputs/rebalance/), 不是 run_pipeline 生成的;compose 只对拍抽取层单点值, 不往下游走到选股。**用现成正确答案喂中途环节, 就永久绕过了"产物如何生成"的生产环节**, 测试看似 read→analyze→report 全链跑通, 实则生成端(组件组装)从没上场, 其 bug 被现成正确数据完美遮蔽。更深一层: 正因为有忠实副本(dividend_cir.py)和独立 strategy.py 能产出正确 CSV, 穿行测试才总有"现成正确数据"可用——**副本的存在直接供养了盲区**(同一个根: 副本既给"已复现成功"假象, 又喂养伪验证)。
-**规则**:
-1. **端到端验证的判据必须是"被测系统自产的终值 == 黄金基线"**, 不是"下游能读入中间产物"。read/load/取数 成功 ≠ 复现成功。
-2. **穿行测试的中途输入禁止用外部已知正确产物喂入**(副本/其他脚本的输出 CSV)。必须让被测链路**自己从头生成**中间产物, 否则测的是消费端不是生产端。
-3. **识别"唯一复现链路"并强制覆盖**: 系统里那条真正从零件重建目标的链路(此处 run_pipeline), 恰恰最可能因"是既有基座/默认能用"而被排除在测试外。改动清单(改了什么)≠ 依赖清单(依赖什么复现), 后者必须端到端测。
-4. **有平行忠实副本时更要警惕**: 副本能跑会制造"已复现"假象并供养伪验证。必须让重写链路**独立产出**并与副本终值对拍(容差量化), 副本只能当 oracle 不能当输入。
-**标签**: #测试 #回测 #架构 #验证 #MCP #穿行测试
-
-## 2026-07-10 — 写"数据源路径"前必须核对真实产物,勿照搬别处 schema
-
-**场景**: 给 DocumentObsidian_Vault skill 写"回测结果自动吸收",指定数据源为 `output_<脚本>/results.csv`、`annual_returns.csv`。
-**错误**: 该路径是照搬 chinapostamc_strategy_callback MCP 的 schema,**没核对这些策略脚本的真实输出**。实测:输出目录里根本没有稳定的 results.csv,指标其实编码在 QuantStats HTML 文件名里(`【策略名】_【区间】_【总收益：X%】_【最大回撤：Y%】.html`),且输出目录命名不固定(output_<名>/ 或 <策略名>/)。穿行测试才抓到。
-**根因**: 把"某个 MCP/工具期望的输入格式"默认成"当前项目的实际产物",跨来源想当然。
-**规则**: 在 skill/文档里写任何"数据源路径/文件名约定"前,**先 find/ls 核对真实文件**,以实测产物为准;不同工具链的输出 schema 不能互相假设。写完用真实文件跑一遍解析器验证(如本次 QS HTML 文件名解析实测 7/7)。
-**标签**: #数据 #Skill #穿行测试 #文档
-**更新 2026-07-10**: 又一次命中,且在**配置/hook 语境**——CLAUDE.md 原「会话工作记忆(L3)」协议声称"DocumentJournal_Daily 写完日志会删除 working-memory 文件",实测该 skill 内 `working-memory` **0 引用**(它只读会话上下文,既不读也不删该文件)= **幻影耦合**;先 `grep` 核实才敢断言、没照搬文档措辞(正是本条规则)。**由此延伸出一条新轴——执行保证**:凡"每次会话/每次操作都要做"的确定性动作,只写进 CLAUDE.md 指令而无 hook 强制 → **会静默失败**(实测 working-memory 目录 mtime 停在 7/8,而 7/9–7/10 数十个会话无一创建)。规则:此类动作**要么 hook 化(确定性执行),要么承认其不可靠**,别指望模型每次记得。据此已退役 L3(改 CLAUDE.md + 清 verify-reminder.py 三条相关提醒)。
-
-## 2026-07-10 — 别被"缺陷审计"框定去复刻既有成品；通用框架的验收判据是"自产合理"而非"命中某成品数字"
-
-**场景**: MCP_Migration 打通通用回测链路(run_pipeline 的 8 通用模块)。手上有一份 AUDIT_链路复刻缺陷.md，通篇以"分层链路复刻不出定稿红利策略1号(5361→…→50→净值9.296179)"立论并给出 A-E 修复路线。
-**错误**: 我照 AUDIT 把 Phase 4 全规划成"让通用 run_pipeline 复刻定稿红利策略的精确数字"，还真去改了 `_pool0_universe` 加红利专用的 perf 内连过滤把 pool_0 焊到 5361。用户纠正："定稿脚本已 0 偏差、无需复刻，真任务是打通**通用**链路本身"。全部回退。
-**根因**: ①把"审计报告的叙事框架"当成任务目标——审计为解释某成品复刻不出而写，不等于任务就是复刻那个成品。②通用框架若以某个定制策略的精确数字为验收判据，会被那个策略"焊死"(专用过滤混入通用层)，丧失普适性。③既有成品已能独立跑通(0 偏差)时，让通用链路去对齐它是零收益的重复劳动。
-**规则**:
-1. 接手前先分清**任务目标**与**手头文档的叙事框架**——审计/缺陷报告的立论视角 ≠ 你的目标，用一句话向用户确认"我们要的是 X 通用能力，还是复刻 Y 具体成品"。
-2. **通用框架的验收判据 = 用通用输入自产合理结果**(数据全 loaded、因子非空、筛选真生效、产出非空)，**绝不锚定任何单个具体策略的精确数字**。一旦发现自己在往通用层塞某策略专用逻辑(如特定 perf 过滤)以命中某数字，立即停手——方向错了。
-3. 既有成品已 0 偏差独立可跑时，不要让通用链路去"复刻"它；通用链路只需自身跑通，成品各行其道。
-**标签**: #架构 #回测 #验证 #方向 #通用框架
-
----
-
-## 2026-07-11 — 新建/修改 Skill 或 MCP 文件,必须先调对应工程类 Skill 并按其规范走,禁止凭通用知识手搓
-
-**场景**: 为"整个项目架构审查"配 hex-graph MCP + 新建架构审计 Skill(EngineeringFrame_Audit)。
-**错误**: 加 MCP 时我直接 `claude mcp add -s user hex-graph -- …` 写进 `~/.claude.json`,**绕过了 Moor 网关**——违反 EngineeringMCP_Scaffold 的 Iron Rule #1("所有 MCP 必须经 Moor,禁止直连")。是用户提醒"要不要检查 MCP 注册规范"才纠正:撤销直连 → 改注册进 `moor.db` + Profile → 重启 Moor 验证 running。
-**根因**: 把"加 MCP / 建 Skill"当成通用工具操作,凭大模型常识(`claude mcp add` / 手写 SKILL.md)就动手,**没先加载本环境的工程类 Skill**。而这些 Skill 恰恰封装了外部不可见的**强制约定**:MCP → 只走 Moor 网关(server 进 moor.db、写库前关 Moor、加进 Profile);Skill → 命名架构(`<域><场景>_<模块>_<功能>`)+ 查重 + 同步架构文档 + 6 步含穿行测试。凭通用知识做,必然踩这些隐藏规范。
-**规则**: 只要**新建或修改 Skill / MCP 文件**,第一步**必须调用对应工程类 Skill 并全程按其协议走**,不得凭通用知识手搓:
-1. 建/改 **MCP** → 先 `EngineeringMCP_Scaffold`:读 `ClaudeCode-MCP_related/README.md` → 关 Moor → 写 moor.db + Profile → 重启验证 running。**永不** `claude mcp add` / 直写 `~/.mcp.json`(除 Moor 网关本身)。
-2. 建/改 **Skill** → 先 `EngineeringSkill_Scaffold`:读 `skills-architecture.*` → 按命名公式定名 + 查重 → 写 SKILL.md(6 章节)→ 同步架构文档计数/场景/清单 → Step6 穿行测试(结构+勾稽+分支+功能烟测)才算完成。
-3. 通用识别信号:凡涉及 `~/.claude/skills/`、`~/.mcp.json`/`moor.db`、SKILL.md、MCP server 的创建/迁移/改配置 → **先想"有没有对应 scaffold skill",有就先调它**,别直接上手。
-**标签**: #Skill #MCP #Moor #工程规范 #工作流 #scaffold
-
-## 2026-07-11 — 组合因子缺口常在多个平行引擎重复出现:补"单一事实源派生层"喂每个引擎,别逐引擎打补丁
-
-**场景**: MCP_Migration 让自定义二阶因子 SlopeROE(单季ROE同比变化的环比)在链路里可写可算。
-**错误/发现**: 初判以为只是 test_factor(研究)的缺口;读设计文档(决策12/13)后才认清——普适回测入口是 **run_pipeline**(8模块),test_factor 只是研究工具;而"派生逐期列(sq_roe_t*)→表达式求值"这一步在**两个平行引擎**(factor_Gil.test_factor 的 df.eval、backtest_Gil.run_pipeline 的 Pool4_FactorComputer)**各断一次**,是同一缺口的两个出口。
-**根因**: factor_compute.py 是决策12钦定的"因子单一事实源",却既没接进 test_factor 也没接进 run_pipeline(3份 TTM/单季实现各写各的)。逐引擎补丁=治标;正解是把派生逻辑收敛到单一层(enrich)、再"接线"进每个引擎的表达式前。
-**规则**:
-1. **遇到能力缺口先问"有几个消费者/引擎"**:组合因子、TTM、单季这类派生,常被多个平行执行路径各自重复实现或各自缺失。修**共享派生层一次**,`enrich(df, expr)` 在每个引擎"取数后、求值前"接一钩子,胜过 N 处补丁。
-2. **两个数据源列名会不同**(compose 用 totalequity/operate_cf,run_pipeline 用 totalshareholderequity/netoperatecashflow)→ 富集层做**角色→前缀解析**(按 df 实际列择一),别硬编码前缀,否则一个源静默 NaN。
-3. **判据=被测系统自产终值==独立 pandas 复算基线**(本次 6 只手算 vs 引擎 diff=0.00e+00),且**最后必过真实 MCP 接口**(重启 Moor 后 preview_period 实调),不能只信直连 python——直连过≠ MCP 过。
-4. **通用框架验收=自产合理**(因子非空+有方差+筛选真生效+产出非空),**绝不锚定某具体策略数字**(避开焊红利数字反模式)。
-5. 顺带挖出的 pre-existing bug(compose 装配把 enddate 元数据截断成只剩 t0)要**按名去重**而非布尔"见过就丢",否则丢掉 t1..t15。
-**标签**: #架构 #因子 #MCP #单一事实源 #富集 #验证 #穿行测试
-
----
-
-## 2026-07-13 — 本地 DuckDB 指数数据库：获取指数行情的第一选择，别碰外部 API
-
-**场景**: 策略路演图表生成，需要获取价值100、国信价值、自由现金流、中证红利、红利质量等 6 个指数的全收益历史行情（2012-2026）。
-**错误**: 先尝试 akshare/yfinance/baostock 等外部 API，均因代理限流、数据覆盖不全等原因失败，浪费大量时间。
-**根因**: 用户本地已有完整的指数数据库（`~/Scholarship is a new sexy/指数数据/`，DuckDB 格式），包含 IndexBasic（指数元信息）+ IndexMarket（日频行情），覆盖中证/国证/深证所有主要指数。
-**规则**:
-1. **获取指数行情数据时，第一步先查本地 DuckDB 指数库**，不要碰 akshare/yfinance 等外部 API。路径固定：`~/Scholarship is a new sexy/指数数据/IndexMarket.duckdb`
-2. 指数匹配流程：用户给中文名称 → `LC_INDEXBASICINFO.INDEXABSTRACT LIKE '%名称%'` 模糊搜索 → 筛选 `INDEXPRICETYPE=2 AND INDEXDESIGNTYPE=2`（真全收益）→ 排除港股版本
-3. **关键发现**：`QT_INDEXQUOTE.INNERCODE = LC_INDEXBASICINFO.INDEXCODE`，直接用 INDEXCODE 查行情
-4. **必须交叉验证**：找到全收益版后，同时查同名价格版（PTYPE=1），确认 全收益累计收益 > 价格累计收益，否则数据有误
-5. CNI（国证/深证）的全收益指数 CODE 往往比价格版大得多（如 价值100 价格=21646，全收益=649008），且 RELATIONSHIP=2
-**标签**: #指数数据 #DuckDB #全收益 #本地数据库
-
----
-
-## 2026-07-13 — 用户没给的信息直接问，禁止猜测或静默替换
-
-**场景**: 1) 生成路演图表时，"中证价值全收益"在数据库中无精确匹配，Claude 自行选了沪深300价值全收益(18008)替代。用户纠正：找不到就诚实说，提供备选让用户选。2) 用户强调：策略路径、指数列表、时间区间这 3 项信息不完整时，必须先问再动手。
-**错误**: 
-- 数据找不到时，自行推断"最接近的"替代方案，静默替换用户要求
-- 输入信息不完整时，假设默认值直接开始任务
-**根因**: 模型倾向于"完成任务"优先于"信息准确"，把猜测当作效率。但量化研究场景对数据来源的精确性要求极高，用错指数就是误导结论。
-**规则**:
-1. **用户指定的指数在数据库中找不到精确匹配 → 诚实告知，列出搜到的相近指数（含名称、代码、数据起止日期），让用户选择。禁止自行选一个替代。**
-2. **任务执行前，检查所需输入是否完整。缺失 → 停止，逐项向用户提问。禁止猜测路径、假设指数列表、用"默认"时间区间。**
-3. 这一条适用于任何需要用户提供参数的技能，应在 Skill 文档中写为前置规则。
-**标签**: #用户交互 #数据准确性 #Skill设计
-
----
-
-## 2026-07-18 — chinapostamc 两套 MCP 系统的数据范围不同，不可混用
-
-**场景**: 为"红利质量"策略制作实盘汇报材料时，直接使用 `chinapostamc_strategy_actual.*` 的数据填充第2页（实盘部分），结果填入的是"价值1号"的持仓和净值。
-**根因**: `chinapostamc_strategy_actual`（实盘估值表系统）和 `chinapostamc_strategy_callback`（回测数据系统）是两个独立MCP Server，并非所有策略在两套系统中都有数据。红利质量(8040)在 actual 系统中无估值表（仅本地Excel文件），在 callback 系统中有完整回测数据。价值1号(8033)则相反——actual 中有16份估值表。
-**规则**: 
-1. **使用 actual 系统前，先 `list_available_dates` 确认该策略是否有估值表文件。**
-2. **同理，使用 callback 系统前，先 `list_strategies` 确认该策略是否在回测数据库中。**
-3. **不要假设"路演PPTX里讲的是X策略，actual系统里就有X策略的数据"——产品代码和策略名称可能不一致。**
-**标签**: #MCP #数据源 #chinapostamc
-
+### Rule Promotion
+某条教训被触发 ≥3 次后 → 提示用户是否提升到 CLAUDE.md 作为永久指令。CLAUDE.md 只有用户明确同意才能修改。

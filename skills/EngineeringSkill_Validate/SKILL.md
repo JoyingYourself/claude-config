@@ -1,20 +1,21 @@
 ---
 name: EngineeringSkill_Validate
 description: Skill 校验 — 扫描 SKILL.md 变更、识别新建/修订 Skill、逐 Skill 功能穿行测试、通过后自动更新 AgentSkillAnnouncement.html。触发词：维护skill、skill维护、更新skill目录、刷新skill列表、检测skill变更、skill校验、校验skill、验证skill。
+disable-model-invocation: true
 ---
 
 # /EngineeringSkill_Validate — Skill 校验
 
 ## 角色定位
 
-Skill 注册表维护与功能校验 Agent。三阶段流水线：① 扫描 `~/.claude/skills/*/SKILL.md` 的文件 mtime 识别新建/修订 Skill → ② 对变更 Skill 执行多维度功能穿行测试 → ③ 测试全部通过后自动更新 `AgentSkillAnnouncement.html`。
+Skill 注册表维护与功能校验 Agent。三阶段流水线：① 扫描 5 个 Skill 路径（全局 + 4 个项目工作区）的 `SKILL.md` 文件 mtime 识别新建/修订 Skill → ② 对变更 Skill 执行多维度功能穿行测试 → ③ 测试全部通过后自动更新 `AgentSkillAnnouncement.html`。
 
 **核心原则**：先验证功能正常，再更新 HTML。任何 Skill 功能测试不通过，HTML 不更新。
 
 ## 路由
 
 本 Skill 不绑定特定 MCP Server。依赖：
-- 文件系统读写（`~/.claude/skills/` 目录、`/Users/junye_shi/AgentFiles/AgentSkillAnnouncement.html`）
+- 文件系统读写（5 个 Skill 路径 + `/Users/junye_shi/AgentFiles/AgentSkillAnnouncement.html`）
 - `Skill` 工具（用于实际调用被测 Skill）
 - `Bash` 工具（用于文件扫描、mtime 比较、HTML 编辑）
 - `Read` / `Edit` / `Write` 工具（用于文件操作）
@@ -25,13 +26,20 @@ Skill 注册表维护与功能校验 Agent。三阶段流水线：① 扫描 `~/
 
 **状态文件**：`/Users/junye_shi/AgentFiles/.skill-registry-state.json`
 - 首次运行时自动创建
-- 记录每个 SKILL.md 的上次 mtime 和校验状态
+- 记录每个 SKILL.md 的来源路径、上次 mtime 和校验状态
 - 格式：
 ```json
 {
   "last_scan": "2026-06-22T10:00:00",
+  "scan_paths": [
+    "~/.claude/skills",
+    "~/AgentFiles/.claude/skills",
+    "~/Scholarship is a new sexy/.claude/skills",
+    "~/中邮资管/.claude/skills",
+    "~/AccumulatingWisdom/.claude/skills"
+  ],
   "skills": {
-    "DocumentJournal_Daily": {
+    "~/.claude/skills/DocumentJournal_Daily": {
       "mtime": "2026-06-20T14:30:00",
       "status": "validated",
       "last_validated": "2026-06-20T14:35:00"
@@ -46,11 +54,31 @@ Skill 注册表维护与功能校验 Agent。三阶段流水线：① 扫描 `~/
 
 ### Phase 1：变更检测
 
+#### Step 1.0：读取 Skill 路径配置
+
+Skill 分布在 5 个路径下：
+
+```bash
+SKILL_PATHS=(
+  "$HOME/.claude/skills"
+  "$HOME/AgentFiles/.claude/skills"
+  "$HOME/Scholarship is a new sexy/.claude/skills"
+  "$HOME/中邮资管/.claude/skills"
+  "$HOME/AccumulatingWisdom/.claude/skills"
+)
+```
+
+**Claude 必须**：扫描时对每个路径独立执行 find，记录 Skill 来源路径。
+
 #### Step 1.1：扫描 SKILL.md 文件
 
 ```bash
-# 获取所有 SKILL.md 文件的 mtime
-find ~/.claude/skills/ -maxdepth 2 -name "SKILL.md" -exec stat -f "%m %N" {} \; | sort
+# 对每个 SKILL_PATHS 中的路径，分别获取所有 SKILL.md 文件的 mtime
+for sp in "${SKILL_PATHS[@]}"; do
+  if [ -d "$sp" ]; then
+    find "$sp" -maxdepth 2 -name "SKILL.md" -exec stat -f "%m %N" {} \; 2>/dev/null
+  fi
+done | sort
 ```
 
 #### Step 1.2：读取状态文件
@@ -63,9 +91,11 @@ find ~/.claude/skills/ -maxdepth 2 -name "SKILL.md" -exec stat -f "%m %N" {} \; 
 
 | 分类 | 判定条件 | 含义 |
 |------|---------|------|
-| `NEW` | 状态文件中无记录 | 首次发现此 Skill |
+| `NEW` | 状态文件中无此路径+Skill 名的记录 | 首次发现此 Skill |
 | `MODIFIED` | mtime 与状态文件中记录不同 | SKILL.md 发生了修订 |
 | `UNCHANGED` | mtime 与状态文件中记录一致 | 无变更，跳过后续阶段 |
+
+**Claude 必须**：变更清单中标注每个 Skill 的来源路径（如 `[全局]`、`[中邮资管]`、`[Scholarship]`）。
 
 #### Step 1.4：展示变更清单
 
@@ -75,10 +105,10 @@ find ~/.claude/skills/ -maxdepth 2 -name "SKILL.md" -exec stat -f "%m %N" {} \; 
 🔍 Skill 变更检测结果（2026-06-22 10:00）
 
 【🆕 新建】2 个
-  • EngineeringSkill_Validate — 首次发现
+  • EngineeringSkill_Validate [全局] — 首次发现
 
 【✏️ 修订】1 个
-  • ResearchGil_Factor_Test — mtime 2026-06-21 → 2026-06-22
+  • ResearchGil_Factor_Test [中邮资管] — mtime 2026-06-21 → 2026-06-22
 
 【✅ 无变更】9 个
 
@@ -416,8 +446,15 @@ STATEOF
 | 角色 | 约定路径 | 说明 |
 |------|----------|------|
 | **输出 1** | `/Users/junye_shi/AgentFiles/AgentSkillAnnouncement.html` | Phase 3 更新，skills 元 Skill 读取展示分类列表 |
-| **输出 2** | `/Users/junye_shi/AgentFiles/.skill-registry-state.json` | 注册表状态基线，记录每个 SKILL.md 的 mtime + 校验状态 |
-| 输入 | `~/.claude/skills/*/SKILL.md` | 扫描所有 Skill 目录下的 SKILL.md，检测 mtime 变更 |
+| **输出 2** | `/Users/junye_shi/AgentFiles/.skill-registry-state.json` | 注册表状态基线，记录每个 SKILL.md 的来源路径 + mtime + 校验状态 |
+| 输入 | 5 个 Skill 路径下的 `*/SKILL.md` | 扫描所有路径的 SKILL.md，检测 mtime 变更 |
+
+**Skill 扫描路径**：
+1. `~/.claude/skills/` — 全局（所有项目可见）
+2. `~/AgentFiles/.claude/skills/` — AgentFiles 项目（MCP/Skill 工程）
+3. `~/Scholarship is a new sexy/.claude/skills/` — Scholarship 项目（数据基础层）
+4. `~/中邮资管/.claude/skills/` — 中邮资管项目（策略研发与实盘）
+5. `~/AccumulatingWisdom/.claude/skills/` — Knowledge 项目（知识沉淀）
 
 > 路径索引：`/Users/junye_shi/AgentFiles/SkillsRelationship_output/02_Engineering_Pipeline/02_Validate/index.html`
 

@@ -1,6 +1,7 @@
 ---
 name: skills
 description: Skill 分类目录 — 自动发现并归类所有自定义 Skill，内置 Skill 折叠展示。触发词：/skills、skill目录、分类、所有skill、技能列表。
+disable-model-invocation: true
 ---
 
 # /skills — Skill 分类目录
@@ -9,7 +10,7 @@ description: Skill 分类目录 — 自动发现并归类所有自定义 Skill�
 
 自动发现当前会话中所有可用 Skill。**自定义 Skill 按分类架构展示，内置 Skill 收拢为辅助区。**
 
-分类权威来源：`/Users/junye_shi/AgentFiles/skills-architecture.md`
+分类权威来源：`/Users/junye_shi/AgentFiles/SkillsRelationship_output/skills-architecture.md`
 
 ---
 

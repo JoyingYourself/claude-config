@@ -1,6 +1,7 @@
 ---
 name: DocumentJournal_Review
 description: 日志回顾与任务追踪 — 读取前 3 个工作日 ChinapostAMC 日志，提取待完成项，交叉校验项目文件实际完成状态，对未完成项生成实现思路与任务规划。默认仅在对话窗口展示，传 --save 则额外落盘。触发词：/DocumentJournal_Review、日志回顾、review journal、任务追踪。
+disable-model-invocation: true
 ---
 
 # /DocumentJournal_Review — 日志回顾与任务追踪

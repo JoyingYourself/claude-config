@@ -1,6 +1,7 @@
 ---
 name: DocumentJournal_Daily
 description: 工作日志追加 — 基于当前会话对话历史，生成结构化章节并追加到当日 MD+HTML 双格式日志。用户选择归属分类（ChinapostAMC / ScholarshipEarning / OtherRelationship）以区分文件存储路径。触发词：worklogue、工作日志、每日总结、写日志。
+disable-model-invocation: true
 ---
 
 # /DocumentJournal_Daily — 工作日志追加

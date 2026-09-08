@@ -173,23 +173,26 @@ const [runResult, auxScriptsResult] = await parallel([
    - 注意: **STOCKS_TO_REMOVE 初始为空列表**，注释说明其值应由池比对结果动态填入
    - 输出 _rebalanced.csv
 
-## 任务二：创建复投脚本
+## 任务二：创建复投脚本（v4 估值表直读版）
 文件路径: ${STEP1_ROOT}/${args.strategyName}/${args.strategyName}_复投脚本.py
 
 要求:
-1. 读取参考模板的复投逻辑
-2. 复投脚本核心逻辑:
-   - 通过 importlib 导入发单脚本的 run_strategy_pipeline() 和相关函数
-   - 从 O32 系统导出的 XLS 读取持仓（兼容 625/0625 两种日期格式）
-   - 全市场重新选股 → 新排名 ∩ XLS 持仓 → 差额 = 总资金×新权重 - 现有市值
+1. 读取参考模板: ${STEP1_ROOT}/dividend_reinvest.py（通用复投脚本 v4）
+2. 复投脚本核心逻辑（两个数据源各司其职）:
+   - **目标权重+排名**: 通过 importlib 导入发单脚本的 run_strategy_pipeline()（策略逻辑一致性，不变）
+   - **精确持仓+闲置资金**: 导入 nav_estimator.load_product() + products_config 读取估值表（替代 O32 XLS 手工导出）
+   - 交叉比对: delta = total_capital × target_w - current_mv(来自估值表精确市值)
+   - **资金阶梯**: 闲置资金 > 3000 元才触发, 可部署资金 = max(0, non_trading_mv - 3000) × cash_ratio(默认0.5)
    - 差额>0 且 ≥100股 → 按排名补仓；差额≤0 → 跳过（只加仓不减仓）
-   - 用户配置: DIVIDEND_CASH / NEW_CAPITAL / REINVEST_DATE / FIN_OBS_DATE / MKT_OBS_DATE
    - 输出 _分红复投_YYYYMMDD.csv
+3. 脚本支持 CLI 参数: --product, --date, --cash-ratio, --min-cash(默认3000), --fin-obs, --mkt-obs
 
 ## 关键约束
 - ❌ 调仓脚本的 STOCKS_TO_REMOVE 初始值为空列表 []，不要硬编码任何历史股票代码
 - ❌ 权重算法必须 import 发单脚本的参数常量（DECAY_LAMBDA / FIRST_WEIGHT_TARGET 或 DY 加权），不要重复硬编码
-- ❌ 复投脚本必须 import 发单脚本的选股管线函数，不要复制粘贴选股逻辑`,
+- ❌ 复投脚本必须 import 发单脚本的选股管线函数，不要复制粘贴选股逻辑
+- ❌ 持仓数据源必须是估值表 (load_product)，不得读取 O32 XLS 文件
+- ❌ 闲置资金 = non_trading_mv（估值表自动提取），不得要求用户手工填写 DIVIDEND_CASH`,
     {
       label: '创建调仓复投脚本',
       phase: '创建调仓复投',

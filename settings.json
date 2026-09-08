@@ -1,4 +1,19 @@
 {
+  "env": {
+    "ANTHROPIC_BASE_URL": "https://api.deepseek.com/anthropic",
+    "ANTHROPIC_AUTH_TOKEN": "sk-b6972ef4c9d94f6c96132b5a308b6b86",
+    "ANTHROPIC_MODEL": "deepseek-v4-flash[1m]",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL": "deepseek-v4-flash[1m]",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL": "deepseek-v4-flash[1m]",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "deepseek-v4-flash[1m]",
+    "CLAUDE_CODE_SUBAGENT_MODEL": "deepseek-v4-flash[1m]",
+    "CLAUDE_CODE_EFFORT_LEVEL": "max",
+    "CLAUDE_CODE_AUTO_COMPACT_WINDOW": "786432",
+    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+    "MCP_TOOL_TIMEOUT": "600000",
+    "MCP_TIMEOUT": "120000",
+    "CLAUDE_CODE_MAX_OUTPUT_TOKENS": "64000"
+  },
   "permissions": {
     "allow": [
       "mcp__moor__data_gil__discover",
@@ -9,11 +24,93 @@
       "mcp__moor__report_gil__load_backtest_result",
       "mcp__moor__vision_bridge__analyze_image",
       "mcp__email__folders",
-      "mcp__wechat__*"
+      "mcp__wechat__*",
+      "Bash(/opt/anaconda3/bin/python3 ~/.claude/skills/DocumentJournal_Daily/render_html.py *)",
+      "Bash(/opt/anaconda3/bin/python3 /Users/junye_shi/.claude/skills/DocumentJournal_Daily/render_html.py *)",
+      "Bash(/usr/bin/expect *)",
+      "Bash(asciinema rec *)",
+      "Bash(python3 /Users/junye_shi/中邮资管/中邮金市/AI使用培训_20260817/素材/演示终端/录制工具/postprocess.py *)",
+      "Bash(python3 /tmp/rec_tools/*)",
+      "Bash(kill *)"
     ]
   },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|Write|Edit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash /Users/junye_shi/.claude/hooks/lesson-guard.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 /Users/junye_shi/.claude/hooks/auto-validate.py \"$CLAUDE_TOOL_INPUT_FILE_PATH\""
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 /Users/junye_shi/.claude/hooks/config-change-reminder.py \"$CLAUDE_TOOL_INPUT_FILE_PATH\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 /Users/junye_shi/.claude/hooks/verify-reminder.py 2>/dev/null || true"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash /Users/junye_shi/.claude/hooks/project-type-prompt.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash /Users/junye_shi/.claude/hooks/project-type-prompt.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "bash /Users/junye_shi/.claude/hooks/statusline-combined.sh",
+    "padding": 2,
+    "refreshInterval": 5
+  },
   "enabledPlugins": {
-    "codebase-audit-suite@levnikolaevich-skills-marketplace": true
+    "codebase-audit-suite@levnikolaevich-skills-marketplace": true,
+    "swift-lsp@claude-plugins-official": true
   },
   "extraKnownMarketplaces": {
     "levnikolaevich-skills-marketplace": {
@@ -23,8 +120,12 @@
       }
     }
   },
+  "channelsEnabled": true,
+  "skipDangerousModePermissionPrompt": true,
   "skipWorkflowUsageWarning": true,
   "theme": "auto",
-  "skipDangerousModePermissionPrompt": true,
-  "channelsEnabled": true
+  "additionalDirectories": [
+    "/Users/junye_shi/Scholarship is a new sexy/GildataDataDictionary",
+    "/Users/junye_shi/中邮资管/中邮金市/2026/DuckDB_QueryServer"
+  ]
 }

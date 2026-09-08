@@ -1,6 +1,7 @@
 ---
 name: EngineeringTask_Plan
 description: 项目任务规划工作流 — 接收项目路径，判断新/老项目，生成 README.md（agent间信息传递）和可编辑任务规划 HTML 报告（含"同意并执行"按钮）。触发词：任务规划、项目规划、task plan、新项目、规划报告。
+disable-model-invocation: true
 ---
 
 # /EngineeringTask_Plan — 项目任务规划

@@ -9,13 +9,13 @@ description: Skill 脚手架 — 按分类架构规范创建新 Skill，自动�
 
 按 `skills-architecture.md` 分类体系创建新 Skill。自动引导命名、生成目录结构、写入 SKILL.md 骨架、校验合规性、执行穿行测试。
 
-**架构文档（唯一权威来源）**：`/Users/junye_shi/AgentFiles/skills-architecture.md`
-**架构文档 HTML**：`/Users/junye_shi/AgentFiles/skills-architecture.html`（与 MD 同步维护）
-**分类 CSV（机器可解析）**：`/Users/junye_shi/AgentFiles/skill-classification.csv`
+**架构文档（唯一权威来源）**：`/Users/junye_shi/AgentFiles/SkillsRelationship_output/skills-architecture.md`
+**架构文档 HTML**：`/Users/junye_shi/AgentFiles/SkillsRelationship_output/skills-architecture.html`（与 MD 同步维护）
+**分类 CSV（机器可解析）**：`/Users/junye_shi/AgentFiles/SkillsRelationship_output/skill-classification.csv`
 
 ## 路由
 
-本 Skill 不绑定特定 MCP Server。依赖文件系统读写（`~/.claude/skills/` 目录）和架构文件（CSV + MD + HTML）。
+本 Skill 不绑定特定 MCP Server。依赖文件系统读写（Skill 路径 + 架构文件）和架构文件（CSV + MD + HTML）。
 
 ## 与其他 Skill 的勾稽关系
 
@@ -28,8 +28,15 @@ description: Skill 脚手架 — 按分类架构规范创建新 Skill，自动�
 
 | 角色 | 约定路径 | 说明 |
 |------|----------|------|
-| **输出** | `~/.claude/skills/{SkillName}/SKILL.md` | 新建 Skill 的 SKILL.md，{SkillName} 在 Step 2b 由用户确认 |
-| 下游消费 | `~/.claude/skills/{SkillName}/SKILL.md` | EngineeringSkill_Validate 扫描 mtime 变更发现新 Skill |
+| **输出** | `$SKILL_BASE/{SkillName}/SKILL.md` | 新建 Skill 的 SKILL.md，路径由用户在 Step 1 Q4 选择 |
+| 下游消费 | `$SKILL_BASE/{SkillName}/SKILL.md` | EngineeringSkill_Validate 扫描 mtime 变更发现新 Skill |
+
+**Skill 路径选项（$SKILL_BASE）**：
+1. `~/.claude/skills` — 全局
+2. `~/AgentFiles/.claude/skills` — AgentFiles
+3. `~/Scholarship is a new sexy/.claude/skills` — Scholarship
+4. `~/中邮资管/.claude/skills` — 中邮资管
+5. `~/AccumulatingWisdom/.claude/skills` — Knowledge
 
 > 路径索引：`/Users/junye_shi/AgentFiles/SkillsRelationship_output/02_Engineering_Pipeline/01_New_Skills/index.html`
 
@@ -38,8 +45,8 @@ description: Skill 脚手架 — 按分类架构规范创建新 Skill，自动�
 ## 前置条件
 
 Claude 执行本 Skill 前必须：
-1. 读取 `/Users/junye_shi/AgentFiles/skills-architecture.md` 全文（获取命名规范 + 分类树 + 现有清单）
-2. 读取 `/Users/junye_shi/AgentFiles/skill-classification.csv` 全文（查重 + 确定分类路径）
+1. 读取 `/Users/junye_shi/AgentFiles/SkillsRelationship_output/skills-architecture.md` 全文（获取命名规范 + 分类树 + 现有清单）
+2. 读取 `/Users/junye_shi/AgentFiles/SkillsRelationship_output/skill-classification.csv` 全文（查重 + 确定分类路径）
 
 ---
 
@@ -73,6 +80,36 @@ Claude 执行本 Skill 前必须：
 
 如果用户提出的场景不在上述列表中 → 这是新场景，需要在 CSV 和架构文档中注册。
 
+**Q4: 创建到哪个工作区？**
+
+```
+1. 全局 (~/.claude/skills/)                    — 所有项目可用（工程基建类 Skill 选这个）
+2. AgentFiles (~/AgentFiles/.claude/skills/)    — MCP/Skill 工程专属
+3. Scholarship (~/Scholarship is a new sexy/.claude/skills/) — 数据基础层
+4. 中邮资管 (~/中邮资管/.claude/skills/)          — 策略研发与实盘管理
+5. Knowledge (~/AccumulatingWisdom/.claude/skills/)   — 知识沉淀层
+```
+
+**Claude 必须**：
+- 根据 Step 1 的 Q2（域）和 Q3（场景）给出建议选项，如：
+  - `ResearchGil_*` → 建议「中邮资管」（策略研发工作区）或「Scholarship」（数据基础层）
+  - `Engineering*` → 建议「全局」
+  - `Document*` → 建议「Knowledge」
+  - `ChinapostAMC_*` → 建议「中邮资管」
+- 但最终由用户确认，不可替用户决定。
+
+选中的工作区路径记录为变量 `$SKILL_BASE`，后续步骤使用。
+
+**$SKILL_BASE 映射表**：
+
+| 选项 | $SKILL_BASE |
+|------|------------|
+| 1. 全局 | `~/.claude/skills` |
+| 2. AgentFiles | `~/AgentFiles/.claude/skills` |
+| 3. Scholarship | `~/Scholarship is a new sexy/.claude/skills` |
+| 4. 中邮资管 | `~/中邮资管/.claude/skills` |
+| 5. Knowledge | `~/AccumulatingWisdom/.claude/skills` |
+
 ---
 
 ### Step 2：确定模块与功能名
@@ -102,7 +139,7 @@ Claude 执行本 Skill 前必须：
 
 ### Step 3：查重并最终确认
 
-1. **查目录**：检查 `~/.claude/skills/<候选名>/` 是否已存在
+1. **查目录**：检查 `$SKILL_BASE/<候选名>/` 是否已存在（注意：需在**所有 5 个路径**中检查重名）
 2. **查 CSV**：检查 CSV 中是否已占用
 3. **查命名规范**：逐条对照架构文档「1.2 命名规则清单」，验证：
    - 大小写正确？
@@ -118,11 +155,12 @@ Claude 执行本 Skill 前必须：
    Skill 名:  ResearchGil_Factor_Combine
    中文描述:  因子合成 — 多因子加权/正交化/降维/行业中性化
    分类路径:  Research → Gil → Factor
-   目录位置:  ~/.claude/skills/ResearchGil_Factor_Combine/
+   工作区:    中邮资管
+   目录位置:  ~/中邮资管/.claude/skills/ResearchGil_Factor_Combine/
 
    合规检查:
    ✅ 命名符合规范
-   ✅ 未与现有 Skill 重名
+   ✅ 未与现有 Skill 重名（已检查全部 5 个路径）
    ✅ 分类路径存在
 
    确认创建？[是 / 修改名称 / 取消]
@@ -137,7 +175,7 @@ Claude 执行本 Skill 前必须：
 **4a. 创建目录**
 
 ```bash
-mkdir -p ~/.claude/skills/<Skill名>/
+mkdir -p $SKILL_BASE/<Skill名>/
 ```
 
 **4b. 写入 SKILL.md**
@@ -212,17 +250,17 @@ description: <中文描述>
 
 ```bash
 # 校验 1: 目录存在
-[ -d ~/.claude/skills/<Skill名>/ ] && echo "✅ 目录已创建"
+[ -d $SKILL_BASE/<Skill名>/ ] && echo "✅ 目录已创建"
 
 # 校验 2: SKILL.md 存在
-[ -f ~/.claude/skills/<Skill名>/SKILL.md ] && echo "✅ SKILL.md 已创建"
+[ -f $SKILL_BASE/<Skill名>/SKILL.md ] && echo "✅ SKILL.md 已创建"
 
 # 校验 3: name 字段一致
-grep -q "^name: <Skill名>$" ~/.claude/skills/<Skill名>/SKILL.md && echo "✅ name 字段一致"
+grep -q "^name: <Skill名>$" $SKILL_BASE/<Skill名>/SKILL.md && echo "✅ name 字段一致"
 
 # 校验 4: 含必要章节
 for sec in "角色定位" "路由" "输入格式" "交互协议" "与其他 Skill 的勾稽关系" "禁止行为"; do
-  grep -q "## $sec" ~/.claude/skills/<Skill名>/SKILL.md && echo "✅ 章节: $sec"
+  grep -q "## $sec" $SKILL_BASE/<Skill名>/SKILL.md && echo "✅ 章节: $sec"
 done
 ```
 
@@ -232,7 +270,7 @@ done
 
 **5a. 更新 CSV**
 
-在 `/Users/junye_shi/AgentFiles/skill-classification.csv` 中添加一行：
+在 `/Users/junye_shi/AgentFiles/SkillsRelationship_output/skill-classification.csv` 中添加一行：
 
 ```
 <一级域中文>,<一级域英文>,<场景中文>,<场景英文>,<模块中文>,<模块英文>,<Skill名>,现有,<说明>,
@@ -242,9 +280,9 @@ done
 
 **5b. 更新架构文档**（仅新建 Skill 时）
 
-在 `/Users/junye_shi/AgentFiles/skills-architecture.md` 的「三、完整 Skill 清单」→「3.1 现有 Skill」表格中添加一行。
+在 `/Users/junye_shi/AgentFiles/SkillsRelationship_output/skills-architecture.md` 的「三、完整 Skill 清单」→「3.1 现有 Skill」表格中添加一行。
 
-**同步更新** `/Users/junye_shi/AgentFiles/skills-architecture.html`：
+**同步更新** `/Users/junye_shi/AgentFiles/SkillsRelationship_output/skills-architecture.html`：
 - 现有 Skill 表格中添加一行
 - 若原在规划中列表，从中移除
 - 更新章节标题中的计数（如 `（9 个）` → `（10 个）`）
@@ -260,6 +298,7 @@ python3 << 'PYEOF'
 import csv, re, os
 
 SKILL = "<Skill名>"
+SKILL_BASE = os.path.expanduser("<用户选择的 $SKILL_BASE>")  # 从 Step 1 Q4 获取
 BASE = "/Users/junye_shi/AgentFiles"
 MD = f"{BASE}/skills-architecture.md"
 HTML = f"{BASE}/skills-architecture.html"
@@ -268,11 +307,11 @@ CSV = f"{BASE}/skill-classification.csv"
 errors = []
 
 # ── 校验 1: 目录 + SKILL.md ──
-if not os.path.isdir(os.path.expanduser(f"~/.claude/skills/{SKILL}")):
+if not os.path.isdir(os.path.join(SKILL_BASE, SKILL)):
     errors.append("❌ 目录不存在")
 else:
     print("✅ 目录存在")
-if not os.path.isfile(os.path.expanduser(f"~/.claude/skills/{SKILL}/SKILL.md")):
+if not os.path.isfile(os.path.join(SKILL_BASE, SKILL, "SKILL.md")):
     errors.append("❌ SKILL.md 不存在")
 else:
     print("✅ SKILL.md 存在")
@@ -372,7 +411,7 @@ else:
     print("✅ HTML 规划中列表无残留")
 
 # ── 校验 7: SKILL.md name 字段一致性 ──
-skill_md_path = os.path.expanduser(f"~/.claude/skills/{SKILL}/SKILL.md")
+skill_md_path = os.path.join(SKILL_BASE, SKILL, "SKILL.md")
 with open(skill_md_path) as f:
     skill_md = f.read()
 name_match = re.search(r'^name:\s*(\S+)', skill_md, re.MULTILINE)
@@ -403,8 +442,9 @@ PYEOF
 |------|------|
 | Skill 名 | <Skill名> |
 | 分类 | <一级域> → <场景> → <模块> |
-| 目录 | ~/.claude/skills/<Skill名>/ |
-| SKILL.md | ~/.claude/skills/<Skill名>/SKILL.md |
+| 工作区 | <用户在 Q4 选择的工作区名称> |
+| 目录 | $SKILL_BASE/<Skill名>/ |
+| SKILL.md | $SKILL_BASE/<Skill名>/SKILL.md |
 | CSV 已更新 | ✅ |
 | 架构 MD 已更新 | ✅ |
 | 架构 HTML 已更新 | ✅ |

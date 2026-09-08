@@ -148,11 +148,42 @@ description: 数据发现与提取 — 通过 data_Gil MCP Server 理解需求�
 |------|------|
 | **secumain 路径** | 必须使用 `BasicData.secumain`（**无引号，无 StockBasic_Main 前缀**） |
 | **companycode → innercode 转换** | `JOIN BasicData.secumain s ON cf.companycode = s.companycode JOIN mkt ON s.innercode = mkt.innercode` |
-| **子查询去重** | ⚠️ **仅 `enddate <= '{fin_date}'`(lte) 的表需要 ROW_NUMBER()**。`tradingday = '{mkt_date}'`(eq) 的表因主键唯一，**不需要去重**，直接 SELECT 即可 |
-| **禁止 DISTINCT ON** | DuckDB 不支持 PostgreSQL 的 `DISTINCT ON` 语法，必须用 ROW_NUMBER() |
-| **tradingday 过滤** | 使用 `= '{mkt_date}'`（精确匹配），因 mkt_date_rule 对应单日观察。**此类型表不需要 ROW_NUMBER() 去重** |
-| **enddate 过滤** | 使用 `<= '{fin_date}'`（≤），取最新报告期。**此类型表必须 ROW_NUMBER() 去重** |
+| **子查询去重** | ⚠️ **仅 `enddate <= '{fin_date}'`(lte) 的表需要去重**。`tradingday = '{mkt_date}'`(eq) 的表因主键唯一，**不需要去重**，直接 SELECT 即可 |
+| **禁止 DISTINCT ON** | DuckDB 不支持 PostgreSQL 的 `DISTINCT ON` 语法，必须用 ROW_NUMBER() 或 ASOF LEFT JOIN |
+| **tradingday 过滤** | 使用 `= '{mkt_date}'`（精确匹配），因 mkt_date_rule 对应单日观察。**此类型表不需要去重** |
+| **enddate 过滤** | 使用 `<= '{fin_date}'`（≤），取最新报告期。**此类型表必须去重** |
 | **仅主板模式** | 涉及 3+ 表跨表 JOIN 时，优先排除科创板（告知用户），保证 SQL 可执行 |
+| **PIT 去重策略** (2026-07-20 新增) | `data_Gil/config.py` 的 `USE_ASOF_PIT` 开关控制：`True`=ASOF LEFT JOIN 自引用（DuckDB ≥ v1.2），`False`=ROW_NUMBER 窗口函数。两种模式均自动检测 `infopubldate` 作为 tiebreaker（同 enddate 多记录时取最新发布日期） |
+
+### 2b. PIT 对齐策略变更 (2026-07-20)
+
+**ASOF LEFT JOIN 模式** (`USE_ASOF_PIT=True`, 默认):
+```sql
+-- 单表 PIT: ASOF 自引用获取每只股票最新 enddate ≤ fin_date 的记录
+SELECT t.*
+FROM (
+    SELECT DISTINCT companycode, CAST('{fin_date}' AS DATE) AS _ref_date
+    FROM db."table"
+    WHERE enddate <= '{fin_date}'
+) _ref
+ASOF LEFT JOIN (SELECT *, enddate FROM db."table" WHERE enddate <= '{fin_date}') t
+  ON _ref.companycode = t.companycode
+  AND _ref._ref_date >= t.enddate
+```
+
+**ROW_NUMBER 模式** (`USE_ASOF_PIT=False`):
+```sql
+-- 单表 PIT: ROW_NUMBER 窗口去重 (含 infopubldate tiebreaker)
+SELECT ... FROM (
+    SELECT ..., ROW_NUMBER() OVER (
+        PARTITION BY companycode ORDER BY enddate DESC, infopubldate DESC
+    ) AS _rn
+    FROM db."table"
+    WHERE enddate <= '{fin_date}'
+) _dedup WHERE _rn = 1
+```
+
+> **决策依据**: 同 `enddate` 可能有多条记录（不同 `infopubldate` 的更正/重述），需 tiebreaker 保证确定性。ASOF 模式对无重复键的查询更简洁；ROW_NUMBER 模式带 tiebreaker 更保守。两种模式输出等价。详见 `MCP_Migration/duckdb_duckdb-src/README.md` Phase 1。
 
 ### 3. 正确 SQL 模板（仅主板 + 财务表 + 估值/行情表）⚠️ 性能优化版
 
